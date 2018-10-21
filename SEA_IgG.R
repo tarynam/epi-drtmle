@@ -1,0 +1,264 @@
+setwd("/Users/oldmac/Desktop/Kenya/SEA Elisa")
+I<-read.csv("SEA_170623.csv")
+II<-read.csv("SEA_170626.csv")
+III<-read.csv("SEA_170627_I.csv")
+IV<-read.csv("SEA_170627_II.csv")
+V<-read.csv("SEA_170701.csv")
+VI<-read.csv("SEA_170705.csv")
+VII<-read.csv("SEA_170706_I.csv")
+VIII<-read.csv("SEA_170706_II.csv")
+IX<-read.csv("SEA_170707.csv")
+X<-read.csv("SEA_170708_I.csv")
+XI<-read.csv("SEA_170708_II.csv")
+
+I$neg<-1.136
+II$neg<-0.997
+III$neg<-0.593
+IV$neg<-0.594
+V$neg<-0.194
+VI$neg<-0.258
+VII$neg<-1.092
+VIII$neg<-1.177
+IX$neg<-0.247
+X$neg<-1.412
+XI$neg<-1.101
+
+I$exp<-"1"
+II$exp<-"2"
+III$exp<-"3"
+IV$exp<-"3"
+V$exp<-"4"
+VI$exp<-"6"
+VII$exp<-"7"
+VIII$exp<-"7"
+IX$exp<-"8"
+X$exp<-"9"
+XI$exp<-"9"
+
+#turn everything to a data table
+I<-as.data.table(I)
+II<-as.data.table(II)
+III<-as.data.table(III)
+IV<-as.data.table(IV)
+V<-as.data.table(V)
+VI<-as.data.table(VI)
+VII<-as.data.table(VII)
+VIII<-as.data.table(VIII)
+IX<-as.data.table(IX)
+X<-as.data.table(X)
+XI<-as.data.table(XI)
+
+
+IX$Sample<-as.factor(IX$Sample)
+VI$Sample<-as.factor(VI$Sample)
+VII$Sample<-as.factor(VII$Sample)
+
+#If I want to use OD
+data<-rbind(I,II,III,IV,V,VI,VII,VIII,IX,X,XI)
+data<-as.data.table(data)
+data$fold<-(data$Value/data$neg)
+data$Dilution[is.na(data$Dilution)]<-1
+data$AdjFold<-(data$Dilution*data$fold)
+
+Data<-summarySE(data, measurevar = "AdjFold",groupvars = "Sample")
+
+#if I want to use IgG counts
+
+I_clean<-I[I$MeanResult<125]
+I_rep<-I[I$MeanResult>125]
+II_clean<-II[II$MeanResult<500]
+II_rep<-II[II$MeanResult>500]
+III_clean<-III[III$MeanResult<32]
+III_rep<-III[III$MeanResult>32]
+IV_clean<-IV[IV$MeanResult<32]
+IV_rep<-IV[IV$MeanResult>32]
+V_clean<-V[V$MeanResult<500]
+V_rep<-V[V$MeanResult>500]
+
+#complicated
+VI$MeanResult<-as.numeric(as.character(VI$MeanResult))
+VI_clean<-VI[VI$MeanResult<500]
+VI_a<-VI[VI$MeanResult>500]
+VI_b<-VI[is.na(VI$MeanResult)]
+VI_b<-VI_b[!is.na(VI_b$Sample)]
+VI_rep<-rbind(VI_a,VI_b)
+
+VII_clean<-VII[VII$MeanResult<500]
+VII_rep<-VII[VII$MeanResult>500]
+
+VIII_clean<-VIII[VIII$MeanResult<125]
+VIII_rep<-VIII[VIII$MeanResult>125]
+
+IX$MeanResult<-as.numeric(as.character(IX$MeanResult))
+IX_clean<-IX[IX$MeanResult<500]
+IX_rep<-IX[IX$MeanResult>500]
+
+X_clean<-X[X$MeanResult<125]
+X_rep<-X[X$MeanResult>125]
+
+XI_clean<-XI[XI$MeanResult<125]
+XI_rep<-XI[XI$MeanResult>125]
+
+#combine
+REP<-rbind(I_rep,II_rep,III_rep,IV_rep,V_rep,VI_rep,VII_rep,VIII_rep,IX_rep,X_rep,XI_rep)
+
+Final<-rbind(I_clean,II_clean,III_clean,IV_clean,V_clean,VI_clean,VII_clean,VIII_clean,IX_clean,X_clean,XI_clean)
+Final<-as.data.table(Final)
+Final<-Final[!(is.na(Final$Value))]
+
+Final$IgG<-"NA"
+for (i in 1:length(Final$IgG)){
+  Final$IgG[i] <- ifelse(is.na(Final$AdjResult[i]), as.character(Final$MeanResult[i]),
+                                as.character(Final$AdjResult[i]))
+}
+REP$IgG<-"NA"
+for (i in 1:length(REP$IgG)){
+  REP$IgG[i] <- ifelse(is.na(REP$AdjResult[i]), as.character(REP$MeanResult[i]),
+                         as.character(REP$AdjResult[i]))
+}
+Final$IgG<-as.numeric(Final$IgG)
+REP$IgG<-as.numeric(REP$IgG)
+
+#clean
+rep<-aggregate(IgG~Sample,REP,FUN = mean)
+final<-aggregate(IgG~Sample,Final,FUN = mean)
+inter<-(intersect(rep$Sample,final$Sample))
+rep_true<-rep[!(rep$Sample %in% inter)]
+
+rapply(final,function(x)length(unique(x)))
+
+
+
+#enrollment data
+NK_HEL<-read.csv("NKSKatoKatzResults 2017_JUN_04.csv")
+TBRU_HEL<-read.csv("TBRUKatoKatzResults 2017_JUN_04.csv")
+Hel<-rbind(NK_HEL,TBRU_HEL)
+#go to Epi RMD to do helminth results
+Hel<-merge(Hel.Results,HEL,by="StudyID")
+
+#combining SEA ELISA tables
+fin<-rbind(final,rep_true)
+fin<-merge(fin,Data,by="Sample")
+fin$StudyID<-fin$Sample
+
+#combine with Epi data
+test<-merge(fin,Final,by="Sample")
+test_2<-merge(fin,Study,by="StudyID")
+
+#combine with recent table from Cheryl
+Study<-read.csv("NK Cohort Samples.csv")
+df<-test[,c(1,3,5,14:16,27,30:32,52:56,63:71,90,91)]
+
+df_1<-subset(df,is.na(df$HIV.Status)))
+df_2<-subset(df,is.na(df$TB.Status))
+IN<-(intersect(df_1$StudyID,df_2$StudyID))
+df_a<-subset(df,is.na(df$TB.Status)&is.na(df$HIV.Status))
+df_1<-df_1[!(df_1$StudyID %in% IN)]
+df_2<-df_2[!(df_2$StudyID %in% IN)]
+df_c<-rbind(df_1,df_2,df_a)
+
+df_d<-merge(df_c,Study,by="StudyID")
+df_d<-merge(df_c,Study,by="StudyID",all=TRUE)
+df_d<-df_d[!(is.na(df_d$IgG))]
+df_d[,"T"]<-NA
+df_d[,"H"]<-NA
+###update new column with value in one of two other columns
+for (i in 1:length(df_d$H)){
+  df_d$H[i] <- ifelse(is.na(df_d$HIV.status[i]), as.character(df_d$HIV.Status[i]),
+                      as.character(df_d$HIV.status[i]))
+}
+
+## update new column with value based on other column
+for (i in 1:length(df_d$T)){
+  df_d$T[i] <- ifelse(is.na(df_d$Screening.Arm[i]),as.character(df_d$TB.Status[i]),
+                      as.character(df_d$Screening.Arm[i]))
+}
+df_d$TB.Status<-df_d$T
+df_d$HIV.Status<-df_d$H
+
+bleh<-intersect(df_d$StudyID,test$StudyID)
+df_b<-test[!(test$StudyID %in% bleh)]
+
+Comp<-rbind(df_b,df_d,fill=TRUE)
+int<-intersect(test_2$StudyID,Comp$StudyID)
+test_2<-test_2[!(test_2$StudyID %in% int)]
+Comp<-rbind(Comp,test_2,fill=TRUE)
+
+#concordant
+length(which(Comp$IgG>40 & Comp$SchistosomaPositive==1))
+length(which(Comp$IgG<40 & Comp$SchistosomaPositive==0))
+
+#discordant
+length(which(Comp$IgG>40 & Comp$SchistosomaPositive==0))
+length(which(Comp$IgG<40 & Comp$SchistosomaPositive==1))
+DISC<-Comp[(Comp$IgG>40 & Comp$SchistosomaPositive==0)]
+
+
+#for eggs vs IgG
+TEST<-merge(Hel,fin,by="StudyID")
+
+EGG<-Final[SchistosomaPositive==1]
+ggplot(EGG, aes(x=SchistosomaIntensity, y=IgG))+
+  xlab("Egg Count") +
+  ylab("S. mansoni-Specific IgG (units/mL)") +
+  ggtitle("") +
+  geom_jitter(size=4)+
+  geom_smooth(method=lm) +
+  theme_bw()+
+  theme(axis.text=element_text(size=20, face="bold" ),axis.title=element_text(size=24,face="bold"),plot.title=element_text(size=36,face="bold"))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.key.size = unit(2.5, "cm"))+
+  theme(legend.text = element_text(size = 20))
+
+TEST_II<-Comp[Comp$IgG>40]
+ggplot(TEST_II, aes(x=TBAntigen, y=IgG))+
+  xlab("Mtb-Specific IFN g") +
+  ylab("S. mansoni-Specific IgG (units/mL)") +
+  ggtitle("") +
+  geom_jitter(size=4)+
+  geom_smooth(method=lm) +
+  theme_bw()+
+  theme(axis.text=element_text(size=20, face="bold" ),axis.title=element_text(size=24,face="bold"),plot.title=element_text(size=36,face="bold"))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.key.size = unit(2.5, "cm"))+
+  theme(legend.text = element_text(size = 20))
+
+ggplot(EGG, aes(x=TB.Status, y=SchistosomaIntensity))+
+  geom_boxplot(outlier.shape = NA, size=2)+
+  coord_cartesian(ylim = c(0, 800))+
+  xlab("TB Status") +
+  ylab("Number of Eggs") +
+  ggtitle("Schistosoma Egg Burden") +
+  theme_bw()+
+  theme(axis.text=element_text(size=16),axis.title=element_text(size=20,face="bold"),plot.title=element_text(size=20,face="bold"))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+IgG<-Comp[!is.na(Comp$TB.Status)]
+IgG$TB.Status<-factor(IgG$TB.Status,levels=c("HEALTHY CONTROL","LTBI"))
+ggplot(IgG, aes(x=TB.Status, y=IgG))+
+  geom_boxplot(outlier.shape = NA, size=2)+
+  coord_cartesian(ylim = c(0, 400))+
+  xlab("TB Status") +
+  ylab("IgG Units/mL") +
+  ggtitle("S. mansoni Specific Antibody Levels") +
+  theme_bw()+
+  theme(axis.text=element_text(size=16),axis.title=element_text(size=20,face="bold"),plot.title=element_text(size=20,face="bold"))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+EGG<-Final[SchistosomaPositive==1]
+EGG<-EGG[!is.na(EGG$TB.Status)]
+EGG$TB.Status<-factor(EGG$TB.Status,levels=c("HEALTHY CONTROL","LTBI", "ACTIVE"))
+ggplot(EGG, aes(x=TB.Status, y=SchistosomaIntensity))+
+  geom_boxplot(outlier.shape = NA, size=2)+
+  coord_cartesian(ylim = c(0, 500))+
+  xlab("TB Status") +
+  ylab("S. mansoni Eggs units/mL") +
+  ggtitle("S. mansoni Specific Antibody Levels") +
+  theme_bw()+
+  theme(axis.text=element_text(size=16),axis.title=element_text(size=20,face="bold"),plot.title=element_text(size=20,face="bold"))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+Missing_1<-Comp[is.na(HIV.Status)]
+Missing_2<-Comp[is.na(TB.Status)]
+
+

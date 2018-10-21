@@ -1,0 +1,40 @@
+---
+title: "Multinomial Analysis"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Websites with Multinomial tutorials
+ <https://stats.idre.ucla.edu/r/dae/multinomial-logistic-regression/>.
+ <https://cran.r-project.org/web/packages/nnet/nnet.pdf/.>
+ <https://www.princeton.edu/~otorres/LogitR101.pdf>.
+ 
+
+## Websites about model selection
+<http://www.stat.wisc.edu/~ane/st572/notes/lec05.pdf>.
+
+
+Based on the calculated p-value, a false rejection of the null hypothesis is
+| extremely unlikely. We are confident that fit3 is significantly better than fit1,
+| with one caveat: analysis of variance is sensitive to its assumption that model
+| residuals are approximately normal. If they are not, we could get a small p-value
+| for that reason. It is thus worth testing residuals for normality. The Shapiro-Wilk
+| test is quick and easy in R. Normality is its null hypothesis. Use
+| shapiro.test(fit3$residuals) to test the residual of fit3.
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

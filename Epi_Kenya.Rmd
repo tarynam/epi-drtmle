@@ -1,0 +1,358 @@
+---
+title: "Kenya"
+output:
+  html_notebook: default
+  html_document: default
+---
+
+```{r Helminth Both}
+library(data.table)
+library(plyr)
+library(dplyr)
+setwd("/Applications/Old Computer/Epi Project/Data_original/")
+Total <- read.csv("TBRUKatoKatzResults 2017_AUG_18.csv")
+DF2 <-read.csv("NK Helminth Database Download 01Feb2018.csv")
+
+
+
+HEL<-rbind(Total,DF2,fill=TRUE)
+#Hel<-separate(Hel,StudyID,c("studyID","visit","iteration"))
+#
+Split = strsplit(as.character(HEL$StudyID),"-");
+HEL$StudyID = as.factor(sapply(Split,"[",1));
+HEL$Visit = as.factor(sapply(Split,"[",2));
+HEL$Visit<-as.numeric(as.character(HEL$Visit))
+HEL$Iteration = as.factor(sapply(Split,"[",4));
+HEL$Iteration<-as.numeric(as.character(HEL$Iteration))
+HEL<-data.table(HEL)
+HEL<-HEL[!(Visit>0)]
+HEL<-dplyr::rename(HEL, HelminthPositive = HelmithPositive)
+
+#
+Egg<-aggregate(SchistosomaIntensity~StudyID,HEL,FUN=mean)
+IgG<-read.csv("IgG.csv")
+
+#Helminth
+S = aggregate(SchistosomaPositive ~ StudyID, data = HEL, function(x) {
+  
+  if (1 %in% x) {
+    return(1);
+  } else {
+    return(0);
+  }
+});
+
+H = aggregate(HelminthPositive ~ StudyID, data = HEL, function(x) {
+  
+  if (1 %in% x) {
+    return(1);
+  } else {
+    return(0);
+  }
+});
+
+A = aggregate(AscarisPositive ~ StudyID, data = HEL, function(x) {
+  
+  if (1 %in% x) {
+    return(1);
+  } else {
+    return(0);
+  }
+});
+
+T = aggregate(TricurisPositive ~ StudyID, data = HEL, function(x) {
+  
+  if (1 %in% x) {
+    return(1);
+  } else {
+    return(0);
+  }
+});
+
+h = aggregate(HookwormPositive ~ StudyID, data = HEL, function(x) {
+  
+  if (1 %in% x) {
+    return(1);
+  } else {
+    return(0);
+  }
+});
+
+dfs<-list(H, A, T, S, h)
+
+Hel.Results<- join_all(dfs, by="StudyID")
+Hel.Results$Number<-(Hel.Results$AscarisPositive+Hel.Results$TricurisPositive+Hel.Results$SchistosomaPositive+Hel.Results$HookwormPositive)
+
+dfs<-list(Hel.Results, Egg, IgG)
+Helminth<-join_all(dfs, by="StudyID")
+remove(Total, DF2, A, h, H, S, T, Egg, HEL, IgG, Hel.Results, dfs, Split)
+```
+
+```{r QFT Both}
+library(dplyr)
+setwd("/Applications/Old Computer/Epi Project/Data_original/")
+TB <- read.csv("TBRU & NK QFT Results_2016_DEC_19.csv")
+Split = strsplit(as.character(TB$StudyID),"-");
+TB$StudyID = as.factor(sapply(Split,"[",1));
+TB$Visit = as.factor(sapply(Split,"[",2))
+TB$Visit <- as.numeric(as.character(TB$Visit))
+TB<-filter(TB, Visit==0) %>%
+filter(QualResult!=3)
+
+
+levels(TB$TBAntigen)[levels(TB$TBAntigen)==">10"] <- "10"
+levels(TB$TBAntigen)[levels(TB$TBAntigen)==">77"] <- "NA"
+levels(TB$Mitogen)[levels(TB$Mitogen)==">10"] <- "10"
+TB$TBAntigen<-as.numeric(as.character(TB$TBAntigen))
+TB$Mitogen<-as.numeric(as.character(TB$Mitogen))
+
+QFT<-read.csv("TBRU_QFTResults_Main 2017_AUG_18.csv")
+Split = strsplit(as.character(QFT$StudyID),"-");
+QFT$StudyID = as.factor(sapply(Split,"[",1));
+QFT$Visit = as.factor(sapply(Split,"[",2))
+QFT$Visit <- as.numeric(as.character(QFT$Visit))
+QFT<-filter(QFT, Visit==0) %>%
+filter(QualResult!=3)
+
+inter<-intersect(TB$StudyID, QFT$StudyID)
+extra<-filter(QFT, !(StudyID%in% inter))
+extra<-extra[,2:17]
+TB<-rbind(TB, extra)
+TB$TBAntigen<-as.numeric(TB$TBAntigen)
+TB$Mitogen<-as.numeric(TB$Mitogen)
+
+TB$QFT=(TB$TBAntigen-TB$NIL)
+TB$Control=(TB$Mitogen-TB$NIL)
+TB<-data.table(TB)
+TB$QualResult[TB$QFT>0.35]<- 1
+TB$QualResult [TB$QFT<0.35]<- 2
+TB$QualResult[TB$QualResult==1] <- as.character("LTBI")
+TB$QualResult[TB$QualResult==2]<-as.character("HEALTHY CONTROL")
+
+remove(extra, QFT, Split, inter)
+```
+
+```{r HIV TBRU}
+setwd("/Applications/Old Computer/Epi Project/Data_original/")
+HIV_TBRU <- read.csv("TBRU HIV TEST RESULTS_2017_JAN_11.csv")
+HIV_TBRU <-as.data.table(HIV_TBRU )
+HIV_TBRU <-HIV_TBRU [!(CurrVisit=="2")]
+HIV_TBRU $HIVResult[HIV_TBRU $HIVResult==1]<-as.character("POS")
+HIV_TBRU $HIVResult[HIV_TBRU $HIVResult==2]<-as.character("NEG")
+HIV_TBRU $StudyID<-as.character(HIV_TBRU $StudyID)
+```
+
+#To-do:
+Add in the age and gender for missing people
+Code in location based on first digit of TBRU Study ID
+
+```{r Enrollment both}
+setwd("/Applications/Old Computer/Epi Project/Data_original/")
+TBRU<-read.csv("TBRU PARTICIPANT INFORMATION.csv")
+TBRU$StudyID<-as.factor(TBRU$StudyID)
+Enrollment<-read.csv("NK Cell Study Enrollment Summary 2018_MAY_01.csv")
+Coenrolled<-read.csv("NK_TBRU Co-enrolled SIDs 2018_AUG_14.csv")
+dups<-Coenrolled$NK.STUDY.ID
+test<-filter(Enrollment, STUDY.ID %in% dups)
+#Enrollment<-dplyr::rename(Enrollment, StudyID=STUDY.ID)
+#deal with double enrolled people
+Enrollment$StudyID<-NA
+for (i in 1:length(Enrollment$StudyID)){
+    if(Enrollment$COENRLD.STUDY[i]=="TBRU"){
+        Enrollment$StudyID[i] <- as.character(Enrollment$CO.ENRLD.STUDY.ID[i])}
+
+    else{
+        Enrollment$StudyID[i] <- as.character(Enrollment$STUDY.ID[i])} 
+}
+Enrollment$StudyID[Enrollment$STUDY.ID=="NK2441"]<-"80003"
+Enrollment$StudyID[Enrollment$STUDY.ID=="NK2649"]<-"30033"
+both<-read.csv("TBRU & NK Cohort Information.csv")
+Cohort<-read.csv("NK Cohort Samples.csv")
+dfs<-list(TBRU, Cohort, both, Enrollment )
+cohort<-join_all(dfs, by="StudyID", type="full")
+cohort$age<-NA
+for (i in 1:length(cohort$age)){
+    if(!is.na(cohort$AGE[i])){
+        cohort$age[i] <- cohort$AGE[i]}
+    
+    else{
+        cohort$age[i] <- cohort$Age[i]} 
+}  
+
+
+cohort$sex<-NA
+for (i in 1:length(cohort$sex)){
+    if(!is.na(cohort$SEX[i])){
+        cohort$sex[i] <- as.character(cohort$SEX[i])}
+    
+    else if(!is.na(cohort$Gender[i])){
+        cohort$sex[i] <- as.character(cohort$Gender[i])} 
+
+    else{
+        cohort$sex[i] <- as.character(cohort$Sex[i])} 
+}
+cohort<-select(cohort, -c(Age, Gender, Sex, AGE, SEX, CPTs.Collected, Cell.Counts..x10.6., Baseline.Completion.Report, Sample.Storage, Date.Enrolled, STATUS))
+remove(TBRU, Enrollment, both, Cohort)
+```
+
+```{r Merge remove pilot samples duplicates and misentered participants}
+dfs<-list(cohort, TB, HIV_TBRU, Helminth)
+Total<-join_all(dfs, by="StudyID", type="full")
+
+library(dplyr)
+#questionable entries
+LabNos<-list("NKS0122","NKS0745", "NKS0416", "NKS1213")
+IDs<-list("NK2464","NK2712", "NK227", "NK26", "NKS2754", "NK2925", "NK2493")
+#pilot samples
+pilot<-list("NK2000","NK2001", "NK2002", "NK2003","NK2004", "NK2005", "NK2006","NK2007", "NK2008", "NK2009","NK2010", "NK2011", "NK2012","NK2013", "NK2014", "NK2015","NK2016")
+dups_before<-Total$StudyID[duplicated(Total$StudyID)]
+
+Total<-dplyr::filter(Total, !(LabNo %in% LabNos)) %>%
+  dplyr::filter(!StudyID %in% IDs) %>%
+    dplyr::filter(!(StudyID %in% pilot))
+
+dups_after<-Total$StudyID[duplicated(Total$StudyID)]
+```
+
+```{r for loops to combine HIV/TB data}
+Total$HIV<-NA
+for (i in 1:length(Total$HIV)){
+    if(!is.na(Total$HIV.status[i])){
+        Total$HIV[i] <- as.character(Total$HIV.status[i])}
+    
+    else if(!is.na(Total$HIVResult[i])){
+        Total$HIV[i] <- Total$HIVResult[i]} 
+    
+    else{
+        Total$HIV[i] <- as.character(Total$HIV.STATUS[i])} 
+}
+Total$HIV[Total$StudyID==""]
+
+
+Total$cd4<-NA
+for (i in 1:length(Total$cd4)){
+    if(!is.na(Total$CD4[i])){
+        Total$cd4[i] <- as.character(Total$CD4[i])}    
+    else{
+        Total$cd4[i] <- as.character(Total$CD4.COUNT[i])} 
+}
+Total$cd4<-as.numeric(Total$cd4)
+
+Total$viral.load<-NA
+for (i in 1:length(Total$viral.load)){
+    if(!is.na(Total$VL[i])){
+        Total$viral.load[i] <- as.character(Total$VL[i])}
+    
+    else{
+        Total$viral.load[i] <- as.character(Total$Viral.Load[i])} 
+}
+Total$viral.load<-as.numeric(Total$viral.load)
+
+Total$ART<-NA
+for (i in 1:length(Total$ART)){
+    if(!is.null(Total$On.Art.[i])){
+        Total$ART[i] <- Total$On.Art[i]}
+    
+    else if(!is.na(Total$ARTInitiated[i])){
+        Total$ART[i] <- "No"[i]} 
+} 
+
+
+Total$IPT<-NA
+for(i in 1:length(Total$IPT)){
+    if(!is.na(Total$IPTInitiated[i])){
+        Total$IPT[i]<-Total$IPTInitiated[i]}
+        
+    else if(!is.na(Total$ON.ANTI.TB.DRUGS[i])){
+        Total$IPT[i] <- Total$ON.ANTI.TB.DRUGS[i]}    
+}
+
+Total$TB<-NA
+for (i in 1:length(Total$TB)){
+    if(!is.na(Total$QualResult[i])){
+        Total$TB[i] <- as.character(Total$QualResult[i])}
+    
+    else if(!is.na(Total$SCREENING.ARM[i])){
+        Total$TB[i] <- as.character(Total$SCREENING.ARM[i])} 
+      
+    else if(!is.na(Total$Screening.Arm[i])){
+        Total$TB[i] <- as.character(Total$Screening.Arm[i])} 
+    
+    else{
+        Total$TB[i] <- as.character(Total$QFT.RESULTS[i])} 
+}
+```
+
+```{r dummy variables}
+Total$HC <-NA
+for (i in 1:length(Total$HC)){
+    if (is.na(Total$TB[i])){
+        Total$HC[i] <- NA}
+    else if (Total$TB[i] =="HEALTHY CONTROL"){
+        Total$HC[i] <- 0}
+    else if (Total$TB[i] =="LTBI"){
+        Total$HC[i] <- 1}
+    else if (Total$TB[i] =="ACTIVE"){
+        Total$HC[i] <- 1}
+    else Total$HC[i] <- NA
+}
+
+Total$LTBI <-NA
+for (i in 1:length(Total$LTBI)){
+    if (is.na(Total$TB[i])){
+        Total$LTBI[i] <- NA}
+    else if (Total$TB[i] =="HEALTHY CONTROL"){
+        Total$LTBI[i] <- 1}
+    else if (Total$TB[i] =="LTBI"){
+        Total$LTBI[i] <- 0}
+    else if (Total$TB[i] =="ACTIVE"){
+        Total$LTBI[i] <- 1}
+    else Total$LTBI[i] <- NA
+}
+
+Total$ATB <-NA
+for (i in 1:length(Total$ATB)){
+    if (is.na(Total$TB[i])){
+        Total$ATB[i] <- NA}
+    else if (Total$TB[i] =="HEALTHY CONTROL"){
+        Total$ATB[i] <- 1}
+    else if (Total$TB[i] =="LTBI"){
+        Total$ATB[i] <- 1}
+    else if (Total$TB[i] =="ACTIVE"){
+        Total$ATB[i] <- 0}
+    else Total$ATB[i] <- NA
+}
+```
+
+
+```{r Missing Data}
+#Missing values
+setwd("/Applications/Old Computer/Epi Project/Data_clean/")
+hel<-dplyr::select(Total, StudyID, STOOL.SCHISTO.1, STOOL.SCHISTO.2, HelminthPositive)
+Miss.hel<-dplyr::filter(hel, is.na(HelminthPositive))
+write.csv(Miss.hel, "missing helminth.csv")
+
+Miss.TB<-select(Total, StudyID, Screening.Arm, SCREENING.ARM, QFT.RESULTS, QualResult, QFT, TB)
+Miss.TB<-dplyr::filter(Miss.TB, is.na(Miss.TB$TB))
+write.csv(Miss.TB, "missing TB.csv")
+
+Miss.HIV<-select(Total, StudyID, HIV.status, HIVResult, HIV.STATUS, HIV, HIVtestDone)
+Miss.HIV<-dplyr::filter(Miss.HIV, is.na(Miss.HIV$HIV))
+write.csv(Miss.HIV, "missing HIV.csv")
+
+missing.entries<-c(Miss.TB$StudyID, Miss.HIV$StudyID, Miss.hel$StudyID)
+missing<-filter(Total, StudyID %in% missing.entries)%>%
+    select(StudyID, Screening.Arm, SCREENING.ARM, QFT.RESULTS,
+           QualResult, QFT, TB, HIV.status, HIVResult, HIV.STATUS, HIV,
+           HIVtestDone, STOOL.SCHISTO.1, STOOL.SCHISTO.2, HelminthPositive)
+write.csv(missing, "Missing Entries.csv")
+
+write.csv(Total, "total.csv")
+trim.total<-select(Total, StudyID, age, sex, RACE, TB, HIV, HelminthPositive, 
+                   AscarisPositive, TricurisPositive, SchistosomaPositive,
+                   HookwormPositive, Number, SchistosomaIntensity, cd4, viral.load,
+                   IgG, OD, SCREENING.SITE, RACE, WHO.STAGE, MAL.TEST.RESULTS,
+                   PT.RESULT, Hb, CXR.REPORT)
+write.csv(trim.total, "trim total.csv")
+```
+
