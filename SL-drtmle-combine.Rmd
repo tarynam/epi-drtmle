@@ -1,0 +1,140 @@
+---
+title: "Untitled"
+author: "Taryn McLaughlin"
+date: "10/30/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+```{r Fake Data}
+HC<-c(rep(0, 400), rep(1,200))
+LTBI<-c(rep(1, 200), rep(0, 400))
+TB<-c(rep(0,200), rep(1, 200), rep(0,200))
+HIV<-sample(c(0,1), 600, replace = TRUE)
+Age<-sample(20:60, 600, replace = TRUE)
+SM<-sample(c(0,1), 600, replace = TRUE)
+Sex<-sample(c(0,1), 600, replace = TRUE);
+dat<-data.frame(cbind(HC, LTBI, TB, HIV, Sex, SM));
+```
+
+```{r Package Requirements, message=FALSE}
+##package requirements
+pkgs <- c("drtmle","earth","SuperLearner","nloptr", "quadprog","plotmo","plotrix",
+          "TeachingDemos","gam","caret","randomForest","arm","RCurl","MASS",
+          "tmle","ggplot2","gbm")
+
+# see what packages are currently installed
+installed_pacakges <- row.names(installed.packages()) # loop over the needed packages
+for(p in pkgs){
+    # check if package is installed
+    already_installed <- p %in% installed_pacakges
+    # if not already installed, install it
+    if(!already_installed){ install.packages(p)
+    }
+    # and load package
+    library(p, character.only = TRUE) }
+```
+
+```{r LTBI HIV-}
+library(dplyr)
+library(SuperLearner)
+library(drtmle)
+y = "LTBI"
+SL_Q <- SuperLearner(
+    # Y is the outcome variable
+    Y = dat[, y],
+    # X is a dataframe of predictor variables, in this case
+    # everything in dat except for LTBI
+    X = dplyr::select(dat,-y), 
+    newX = NULL,
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.glm","SL.mean"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+
+SL_g <- SuperLearner(
+    # our outcome is now the S. mansoni variable
+    Y = dat$SM, 
+    # our predictors are all variables except for LTBI and S. mansoni
+    X = dplyr::select(dat, -SM, -y),
+    # outcome is binary, so let's use family = binomial()
+    family = binomial(),
+    # and convex combination nnloglikelihood method
+    method= "method.CC_nloglik",
+    # simple library for now
+    SL.library = c("SL.glm","SL.mean")
+)
+
+###Propensity scores aka gn in drtmle
+
+# since we want to run drtmle on HIV- and HIV+ separately we need a way to
+# only include propensity scores for each group
+include<-rownames(subset(dat, dat$HIV==0))
+
+# get propensity scores where P(A = 1 | W) for all observations
+# by extracting SL.pred values from the superlearner object
+gn <- data.frame(SL_g$SL.pred)
+gn <- subset(gn, rownames(gn) %in% include)
+gn_1 <- as.matrix(gn$SL_g.SL.pred)
+
+# generate gn list (the 10 part indicates the order aka A=1 then A=0)
+gn10 <- list(
+    # first entry is P(A = 1 | W)
+    gn_1,
+    # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
+    (1 - gn_1)
+)
+
+###Outcome Regressions aka Qn in drtmle
+
+# Again we only want the outcome regressions for the HIV- subset
+data<-dplyr::filter(dat, HIV==0)
+# set up a data frame where everyone has SM=1 or SM=0
+dat1 <- select(data,-SM)
+dat1$SM <- 1
+dat0 <- select(data, -SM)
+dat0$SM <- 0
+
+# for each SM=0 and SM=1 get OR values for each row of the new data frame
+# using the predict function in the OR model built by super learner (SL_Q)
+Q1n <- predict(SL_Q, newdata=dat1)$pred
+Q0n <- predict(SL_Q, newdata=dat0)$pred
+
+# generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+Qn10 <- list(
+  # first entry is predicted values setting A = 1
+  Q1n,
+  # second entry is predicted values setting A = 0
+  Q0n
+)
+
+fit_HIVneg <- drtmle(Y=data$LTBI, A=data$SM, 
+                     W=dplyr::select(data, -LTBI, -SM),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn10, gn = gn10, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+```
+
+

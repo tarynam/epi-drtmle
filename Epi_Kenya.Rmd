@@ -45,7 +45,6 @@ splitter<-function(data,column,splitter,one=NULL,two=NULL,three=NULL,four=NULL){
         data[,one]<-labels[[1]]
         data[,two]<-labels[[2]]
         data[,three]<-labels[[3]]
-        data[,four]<-labels[[4]]
         return(data)
 }
 
@@ -127,7 +126,7 @@ Helminth<-replace.btwn.tables(Helminth, Coenrolled, "StudyID", "TBRU.STUDY.ID", 
 ```{r QFT Both}
 library(dplyr)
 setwd("/Applications/Old Computer/Epi Project/Data_original/")
-QFT1 <- read.csv("TBRU & NK QFT Results_2016_DEC_19.csv")
+QFT1 <- read.csv("NK Study QFT Results 2018_SEP_03.csv")
 QFT1<-splitter(QFT1, "StudyID", "-", one="StudyID", two="Visit")
 QFT1<-arrange(QFT1, StudyID)%>%
     filter(Visit==0 & QualResult!=3)
@@ -149,11 +148,13 @@ QFT<-rbindlist(list(QFT1, QFT2), fill=TRUE)
 QFT<-unique(QFT)
 #There are still duplicated Study IDs though... deal with later
 
+QFT$NIL <- gsub(">10","10", QFT$NIL)
 QFT$TBAntigen <- gsub(">10","10", QFT$TBAntigen)
 QFT$TBAntigen <- gsub(">77","NA", QFT$TBAntigen)
 QFT$Mitogen <- gsub(">10","10", QFT$Mitogen)
 QFT$TBAntigen <- as.numeric(QFT$TBAntigen)
 QFT$Mitogen <- as.numeric(QFT$Mitogen)
+QFT$NIL<-as.numeric(QFT$NIL)
 #Do my own math because I don't trust people
 QFT$QFT <- (QFT$TBAntigen-QFT$NIL)
 QFT$Control <- (QFT$Mitogen-QFT$NIL)
@@ -223,9 +224,7 @@ Total<-dplyr::filter(Total, !(LabNo %in% LabNos)) %>%
   dplyr::filter(!StudyID %in% IDs) %>%
     dplyr::filter(!(StudyID %in% pilot))
 
-Total<-select(Total, -DATE.CONSENTED, -ResultDate, -EntryDate, -Created, -Modified, -RowVersion,
-              -DateFormFilled, -HIVtestDate, -DateQCDone
-              )
+Total<-select(Total, -DATE.CONSENTED, -ResultDate, -EntryDate, -Created, -Modified, -RowVersion,-DateFormFilled, -HIVtestDate, -DateQCDone)
 Total<-unique(Total)
 
 dups_after<-Total$StudyID[duplicated(Total$StudyID)]
@@ -270,6 +269,8 @@ for (i in 1:length(Total$HIV)){
     else{
         Total$HIV[i] <- as.character(Total$HIV.STATUS[i])} 
 }
+#From Cheryl unless desginated positive all TRU study participants are negative
+Total$HIV[Total$Study=="TRU" & is.na(Total$HIV)]<-"NEG"
 #From Cheryl 0 means test not done
 Total$HIV<-gsub("0", "NA", Total$HIV)
 
@@ -393,7 +394,7 @@ for(i in 1:length(Total$Drug.Resistant)){
 Total$Days.to.MGIT.Culture.<-as.numeric(as.character((Total$Days.to.MGIT.Culture.)))
 ```
 
-```{r updating and including location data}
+```{r updating study and location data}
 #From Cheryl SIDs starting with ‘8’ or ‘3’ were enrolled at CRC; all TBRU SIDs starting with ‘4’ were enrolled at Kombewa.
 Total$SCREENING.SITE[grepl("8|3", Total$StudyID)]<-"JOOTRH"
 Total$SCREENING.SITE[grepl("4", Total$StudyID)]<-"KOMBEWA"
@@ -406,6 +407,11 @@ location$facility[grepl("4|5", location$Facility)]<-"KOMBEWA"
 location<-arrange(location, StudyID)
 
 Total<-replace.btwn.tables2(Total, location, "StudyID", "StudyID", "SCREENING.SITE", "facility")
+
+Total$Study[grepl("NK", Total$StudyID)]<-"NKS"
+Total$Study[grepl("30|40|80", Total$StudyID)]<-"TRU"
+
+
 ```
 
 ```{r dummy variables}
@@ -460,40 +466,41 @@ Total$age[Total$StudyID=="NK2841"]<-20
 Total$viral.load[Total$HIV=="NEG"]<-0
 ```
 
-```{r Seoarate into Data Tables to get missing data}
+```{r Separate into Data Tables to get missing data}
 #Missing values
 library(dplyr)
 setwd("/Applications/Old Computer/Epi Project/Data_clean/")
 library(dplyr)
 Dates<-select(Total, StudyID, Date.Consented, Date.Enrolled, ART.Start.Date, DATE.ANTI.TB.STARTED, Days.on.TB.Tx)
 
-Total<-select(Total, -UserCode, -CurrVisit, -FollUpVisit, -StaffInitials, -HIVtestDone, -ReasonTestND, -OtherReasonTestND, -Comments, -QCStaffInitials, -EntryUserInitials, CPTs.Collected, Cell.Counts..x10.6., Baseline.Completion.Report, Sample.Storage, -IgG.both, -OD.both, -Date.Enrolled, -REASON, -CPTs.Collected, -Cell.Counts..x10.6., -Baseline.Completion.Report, -Sample.Storage, -STATUS, -Visit, -RecID, -COENRLD.STUDY, -Date.Consented, -Date.Enrolled, -ART.Start.Date, -DATE.ANTI.TB.STARTED, -REFERRAL.POINT, -Study, -QFTType, -TBAntigen2, -QualResult, -SCREENING.ARM, -Screening.Arm, -QFT.RESULTS, -IPTInitiated, -ON.ANTI.TB.DRUGS, -On.ART., -ARTInitiated, -AGE, -Age, -SEX, -Gender, -Sex, -HIV.status, -HIVResult, -HIV.STATUS, -CD4, -CD4.COUNT, -VL, -Viral.Load)###Still need to remove original TB exam columns
+Total<-select(Total, -UserCode, -CurrVisit, -FollUpVisit, -StaffInitials, -HIVtestDone, -ReasonTestND, -OtherReasonTestND, -Comments, -QCStaffInitials, -EntryUserInitials, CPTs.Collected, Cell.Counts..x10.6., Baseline.Completion.Report, Sample.Storage, -IgG.both, -OD.both, -Date.Enrolled, -REASON, -CPTs.Collected, -Cell.Counts..x10.6., -Baseline.Completion.Report, -Sample.Storage, -STATUS, -Visit, -RecID, -COENRLD.STUDY, -Date.Consented, -Date.Enrolled, -ART.Start.Date, -DATE.ANTI.TB.STARTED, -REFERRAL.POINT, -QFTType, -TBAntigen2, -QualResult, -SCREENING.ARM, -Screening.Arm, -QFT.RESULTS, -IPTInitiated, -ON.ANTI.TB.DRUGS, -On.ART., -ARTInitiated, -AGE, -Age, -SEX, -Gender, -Sex, -HIV.status, -HIVResult, -HIV.STATUS, -CD4, -CD4.COUNT, -VL, -Viral.Load)###Still need to remove original TB exam columns
 
-TB.missing<-select(Total, StudyID, TB, CXR.REPORT, FM..RESULTS, EXPERT.RESULTS, HAIN.TEST.RESULTS, MGIT.Culture, Days.on.TB.Tx, Household.contact.treated.for.TB.within.past.2.yrs, Treated.for.TB.Previously., NIL, TBAntigen, Mitogen, QFT)
+TB.missing<-select(Total, StudyID, TB, CXR.REPORT, FM..RESULTS, EXPERT.RESULTS, HAIN.TEST.RESULTS, MGIT.Culture, Days.on.TB.Tx, Household.contact.treated.for.TB.within.past.2.yrs, Treated.for.TB.Previously., NIL, TBAntigen, Mitogen, QFT)%>%
+    filter(is.na(TB)|is.na(QFT)|is.na(CXR.REPORT))
 
 Hel.missing<-select(Total, StudyID, HelminthPositive, AscarisPositive, TricurisPositive, SchistosomaPositive, HookwormPositive, SchistosomaIntensity)%>%
     filter(is.na(HelminthPositive))
 
 Demographic.missing<-select(Total, StudyID, age, sex, SCREENING.SITE, RACE,
                             MAL.TEST.RESULTS, PT.RESULT, Hb)%>%
-filter(is.na(RACE) | is.na(age) | is.na(SCREENING.SITE) | is.na(Hb))
+    filter(is.na(RACE) | is.na(age) | is.na(SCREENING.SITE) | is.na(Hb))
 
 HIV.missing<-select(Total, StudyID, HIV, cd4, viral.load, WHO.STAGE)%>%
     filter(!(WHO.STAGE %in% c("1","3")))%>%
     filter(HIV!="NEG")
 
-myList <-list(Dates, TB.missing, Hel.missing, Demographic.missing, HIV.missing)
-for(i in names(myList)){
-  write.csv(myList[[i]], paste0(i,".csv"))
-}
-
-write.csv(Total, paste(paste("total", date(), sep="_"),"csv", sep="."))
+#have to run these at the console for whatever reason
+write.csv(Dates, "dates.csv")
+write.csv(TB.missing, "missing-tb.csv")
+write.csv(Hel.missing, "missing-helminth.csv")
+write.csv(Demographic.missing, "missing-demographic.csv")
+write.csv(HIV.missing, "missing-HIV.csv")
+write.csv(Total, "complete-kenya.csv")
 
 sumNA<-colSums(is.na(Total))
 miss.var<-rbind(names(Total), sumNA)
 sumNA2<-rowSums(is.na(Total))
 miss.donor<-cbind(Total$StudyID, sumNA2)
 ```
-
 
 
