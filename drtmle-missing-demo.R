@@ -55,3 +55,21 @@ out_fit_ps <-  drtmle(W = W, A = A, Y = Y, stratify = FALSE,
                       glm_Q = "W1 + W2*A", glm_Qr = "gn",
                       glm_gr = "Qn", family = binomial())
 out_fit_ps
+
+
+theta<-out_fit_ps$drtmle$est[1]-out_fit_ps$drtmle$est[2]
+#the first derivatives of the function with respect to est 1 is 1 and with respect to est 2 is -1
+f<-matrix(c(1,-1), nrow=2, ncol=1)
+ft<-t(f) #transpose
+sigma<-out_fit_ps$drtmle$cov #sigma is the variance covariance matrix
+var<- ft %*% sigma %*% f  #the variance for the function is the matrix multiplication of all these things
+n <- length(Y) #Why don't we use this? 
+
+ciu <- theta + 1.96 * sqrt(var) #don't use n which I don't understand.
+cil <- theta - 1.96 * sqrt(var)
+
+proof<-rbind(
+    data.frame(ci(out_fit_ps, contrast = c(1,-1))$drtmle),
+    c(theta, cil, ciu))
+
+
