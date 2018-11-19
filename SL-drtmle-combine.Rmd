@@ -41,7 +41,7 @@ for(p in pkgs){
 remove(pkgs, installed_pacakges, p, already_installed)
 ```
 
-```{r LTBI HIV- no missing data}
+```{r LTBI HIV- no missing data, eval = FALSE}
 library(dplyr)
 library(SuperLearner)
 library(drtmle)
@@ -140,7 +140,7 @@ fit_HIVneg <- drtmle(Y=data$LTBI, A=data$SM,
 )
 ```
 
-```{r LTBI HIV- missing data}
+```{r LTBI missing data}
 library(dplyr)
 library(SuperLearner)
 library(drtmle)
@@ -154,48 +154,38 @@ dat$DeltaA <- 1
 dat$DeltaA[is.na(dat$SM)] <- 0
 dat$DeltaY <- 1
 dat$DeltaY[is.na(dat[,y])] <- 0
+# For all these Super Learners...
+# Outcome is binary, so use family = binomial()
+# Ensemble using convex combination nnloglikelihood method
 
 # first regress indicator of missing A on W
-SL_DeltaA <- SuperLearner(
+SL.LTBI_DeltaA <- SuperLearner(
     # our outcome is whether we observe A or not
     Y = dat$DeltaA, 
-    ##### our predictors are all variables except for LTBI, SM and whether we observed SM/LTBI
+    # our predictors are all variables except for LTBI, SM and whether we observed SM/LTBI
     X = dplyr::select(dat, -DeltaA, -DeltaY, -SM, -y),
-    # outcome is binary, so use family = binomial()
     family = binomial(),
-    # and convex combination nnloglikelihood method
     method= "method.CC_nloglik",
-    # simple library for now
     SL.library = c("SL.glm","SL.mean")
 )
 
-# get estimated propensity for observing A
-ps_DeltaA <- SL_DeltaA$SL.pred
-
-##### now regress A on W | DeltaA = 1
-SL_A <- SuperLearner(
+# now regress A on W | DeltaA = 1
+SL.LTBI_A <- SuperLearner(
     # our outcome is A (SM in this case)
     Y = dplyr::filter(dat, DeltaA == 1)$SM, ####???
     # our predictors are all variables except for LTBI, SM and whether we observed SM/LTBI
     # for all rows where DeltaA = 1
     X = dplyr::filter(dat, DeltaA == 1)%>%
         dplyr::select(-DeltaA, -DeltaY, -SM, -y),
-    ###### newx so that the SL.pred returns a vector the full length of the data set --->>
-    # the example using glm had the SL_A return a vector the full length of the data set
+    # newx so that the SL.pred returns a vector the full length of the data set
     newX = dplyr::select(dat, -DeltaA, -DeltaY, -SM, -y),
     family = binomial(),
     method= "method.CC_nloglik",
     SL.library = c("SL.glm","SL.mean")
 )
 
-# get estimated propensity for A = 1
-ps_A1 <- SL_A$SL.predict
-# propensity for A = 0
-ps_A0 <- 1 - ps_A1
-
-# now regress DeltaY on A + W | DeltaA = 1. Here we are pooling over values of A
-# this is what drtmle does if stratify = FALSE
-SL_DeltaY <- SuperLearner(
+# now regress DeltaY on A + W | DeltaA = 1 ... pooling over values of A
+SL.LTBI_DeltaY <- SuperLearner(
     # our outcome is whether we observe Y or not
     Y = dplyr::filter(dat, DeltaA == 1)$DeltaY, 
     # our predictors are all variables except for LTBI, SM and whether we observed SM/LTBI
@@ -206,48 +196,19 @@ SL_DeltaY <- SuperLearner(
     SL.library = c("SL.glm","SL.mean")
 )
 
-# get estimated propensity for observing outcome if A = 1
-dat1 <- dplyr::select(dat,-SM) #gets rid of the SM variable so you can
-dat1$SM <- 1 #add it back with all values = 1
-ps_DeltaY_A1 <- predict(SL_DeltaY, newdata=dat1)$pred #then predict on this using the SL output
-
-# get estimated propensity for observing outcome if A = 0 ... same as above but with A = 0
-dat0 <- dplyr::select(dat, -SM) 
-dat0$SM <- 0
-ps_DeltaY_A0 <- predict(SL_DeltaY, newdata=dat0)$pred
-
-# since we want to run drtmle on HIV- and HIV+ separately we need a way to
-# only include propensity scores for each group
-include<-rownames(subset(dat, dat$HIV==0))
-# propensity for observing A, A =1 and for observing Y given A = 1
-gn <- data.frame(ps_DeltaA * ps_A1 * ps_DeltaY_A1)
-gn <- subset(gn, rownames(gn) %in% include)
-gn_1 <- gn$ps_DeltaA...ps_A1...ps_DeltaY_A1
-# propensity for observing A, A = 0 and for observing Y given A = 0
-gn <- data.frame(ps_DeltaA * ps_A0 * ps_DeltaY_A0)
-gn <- subset(gn, rownames(gn) %in% include)
-gn_0 <- gn$ps_DeltaA...ps_A0...ps_DeltaY_A0
-
-# now combine all results into a single propensity score list
-gn10 <- list(gn_1, gn_0)
-
-###Outcome Regressions aka Qn in drtmle
-
-SL_Q <- SuperLearner(
+# lastly regress Y on A + W | DeltaY = 1
+SL.LTBI_Q <- SuperLearner(
     Y = dplyr::filter(dat, DeltaY == 1)[,y], ####???
     # our predictors are all variables except for LTBI, SM and whether we observed SM/LTBI
-    # for all rows where DeltaA = 1
+    # for all rows where DeltaY = 1 (aka where we observe Y)
     X = dplyr::filter(dat, DeltaY == 1)%>%
         dplyr::select(-DeltaA, -DeltaY, -SM, -y),
-    ###### newx so that the SL.pred returns a vector the full length of the data set --->>
-    # the example using glm had the SL_A return a vector the full length of the data set
+    # newx so that the SL.pred returns a vector the full length of the data set --->>
     newX = dplyr::select(dat, -DeltaA, -DeltaY, -SM, -y), 
     family = binomial(), 
-    # SL.library will be filled more completely later
     SL.library = c("SL.glm","SL.mean"),
     method = "method.CC_nloglik",
-    # id specifies a unique subject identifier. data only has one row 
-    # per subject, so OK to leave as NULL (default)
+    # id specifies a unique subject identifier. data has one row per subject, so OK to leave as NULL
     id = NULL, 
     # verbose controls the printing of messages of SuperLearner's progress.
     verbose = FALSE, 
@@ -256,15 +217,49 @@ SL_Q <- SuperLearner(
     # algorithms later. We will leave as default
     control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
     # cvControl specifies parameters related to cross validation. Of note
-    # the default is for V=10-fold cross validation. See ?SuperLearner
-    # for more details
+    # the default is for V=10-fold cross validation.
     cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
                      validRows = NULL)
 )
 
-# ---> Error in SuperLearner(Y = dat[, y], X = dplyr::select(dat, -y), family = binomial(),  : 
-  # missing data is currently not supported. Check Y, X, and newX for missing values
+# get estimated propensity for observing A
+ps_DeltaA <- SL.LTBI_DeltaA$SL.pred
 
+# get estimated propensity for A = 1
+ps_A1 <- SL.LTBI_A$SL.predict
+# propensity for A = 0
+ps_A0 <- 1 - ps_A1
+
+# get estimated propensity for observing outcome if A = 1
+dat1 <- dplyr::select(dat,-SM) #gets rid of the SM variable so you can
+dat1$SM <- 1 #add it back with all values = 1
+ps_DeltaY_A1 <- predict(SL.LTBI_DeltaY, newdata=dat1)$pred #then predict on this using the SL output
+
+# get estimated propensity for observing outcome if A = 0 ... same as above but with A = 0
+dat0 <- dplyr::select(dat, -SM) 
+dat0$SM <- 0
+ps_DeltaY_A0 <- predict(SL.LTBI_DeltaY, newdata=dat0)$pred
+
+# propensity for observing A, A =1 and for observing Y given A = 1
+gn1 <- data.frame(ps_DeltaA * ps_A1 * ps_DeltaY_A1)
+# propensity for observing A, A = 0 and for observing Y given A = 0
+gn0 <- data.frame(ps_DeltaA * ps_A0 * ps_DeltaY_A0)
+
+
+####Combining to run drtmle for HIV-
+
+#Propensity Scores
+# since we want to run drtmle on HIV- and HIV+ separately we need a way to
+# only include propensity scores for each group
+include<-rownames(subset(dat, dat$HIV==0))
+gn_1 <- subset(gn1, rownames(gn1) %in% include)
+gn_1 <- gn_1$ps_DeltaA...ps_A1...ps_DeltaY_A1
+gn_0 <- subset(gn0, rownames(gn0) %in% include)
+gn_0 <- gn_0$ps_DeltaA...ps_A0...ps_DeltaY_A0
+
+
+# now combine all results into a single propensity score list
+gn10 <- list(gn_1, gn_0)
 
 # Again we only want the outcome regressions for the HIV- subset
 data<-dplyr::filter(dat, HIV==0)
@@ -276,8 +271,8 @@ dat0$SM <- 0
 
 # for each SM=0 and SM=1 get OR values for each row of the new data frame
 # using the predict function in the OR model built by super learner (SL_Q)
-Q1n <- predict(SL_Q, newdata=dat1)$pred
-Q0n <- predict(SL_Q, newdata=dat0)$pred
+Q1n <- predict(SL.LTBI_Q, newdata=dat1)$pred
+Q0n <- predict(SL.LTBI_Q, newdata=dat0)$pred
 
 # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
 Qn10 <- list(
@@ -287,12 +282,61 @@ Qn10 <- list(
   Q0n
 )
 
-# pass in this gn to drtmle ... what about Qn?
-fit_HIVneg <- drtmle(Y=data[,y], A=data$SM, 
+# pass in this gn to drtmle
+fit_LTBI_HIVneg <- drtmle(Y=data[,y], A=data$SM, 
                      W=dplyr::select(data, -LTBI, -SM),
                      a_0 = c(1,0), family = binomial(),
                      Qn = Qn10, gn = gn10, 
                      SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
 )
+
+IC_LTBI_HIVN<-fit_LTBI_HIVneg$ic_drtmle$ic
+
+####Combining to run drtmle for HIV+
+
+#Propensity Scores
+# since we want to run drtmle on HIV- and HIV+ separately we need a way to
+# only include propensity scores for each group
+include<-rownames(subset(dat, dat$HIV==1))
+gn_1 <- subset(gn1, rownames(gn1) %in% include)
+gn_1 <- gn_1$ps_DeltaA...ps_A1...ps_DeltaY_A1
+gn_0 <- subset(gn0, rownames(gn0) %in% include)
+gn_0 <- gn_0$ps_DeltaA...ps_A0...ps_DeltaY_A0
+
+
+# now combine all results into a single propensity score list
+gn10 <- list(gn_1, gn_0)
+
+# Again we only want the outcome regressions for the HIV- subset
+data<-dplyr::filter(dat, HIV==1)
+# set up data frames where everyone has SM=1 or SM=0
+dat1 <- dplyr::select(data,-SM)
+dat1$SM <- 1
+dat0 <- dplyr::select(data, -SM)
+dat0$SM <- 0
+
+# for each SM=0 and SM=1 get OR values for each row of the new data frame
+# using the predict function in the OR model built by super learner (SL_Q)
+Q1n <- predict(SL.LTBI_Q, newdata=dat1)$pred
+Q0n <- predict(SL.LTBI_Q, newdata=dat0)$pred
+
+# generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+Qn10 <- list(
+  # first entry is predicted values setting A = 1
+  Q1n,
+  # second entry is predicted values setting A = 0
+  Q0n
+)
+
+# pass everything to drtmle
+fit_LTBI_HIVpos <- drtmle(Y=data[,y], A=data$SM, 
+                     W=dplyr::select(data, -LTBI, -SM),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn10, gn = gn10, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+
+IC_LTBI_HIVP<-fit_LTBI_HIVpos$ic_drtmle$ic
+
 ```
 
