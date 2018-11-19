@@ -48,7 +48,6 @@ splitter<-function(data,column,splitter,one=NULL,two=NULL,three=NULL,four=NULL){
         data[,three]<-labels[[3]]
         return(data)
 }
-
 ```
 
 ```{r Helminth Both}
@@ -135,9 +134,9 @@ QFT1b <-read.csv("NK QFTData_Clinical Database.csv")
 inter<-intersect(QFT1a$StudyID, QFT1b$StudyID)
 QFT1b <- filter(QFT1b, !(StudyID %in% inter))%>%
     dplyr::rename(TBAntigen = TBAg) %>%
-    filter(TBAntigen < 10 | Mitogen < 10)%>%
-    mutate(Study="NKS")%>%
-    select(RecID , StudyID , ResultDate , NIL , TBAntigen , Mitogen, UserCode, EntryDate, Created , Modified , RowVersion)
+    dplyr::filter(TBAntigen < 10 | Mitogen < 10)%>%
+    dplyr::mutate(Study="NKS")%>%
+    dplyr::select(RecID , StudyID , ResultDate , NIL , TBAntigen , Mitogen, UserCode, EntryDate, Created, Modified , RowVersion)
 l<-list(QFT1a, QFT1b)
 QFT1<-data.frame(rbindlist(l, fill = TRUE))
 QFT1$StudyID<-as.character(QFT1$StudyID)
@@ -152,7 +151,7 @@ QFT2<-replace.btwn.tables(QFT2, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUD
 QFT2<-filter(QFT2, !(StudyID %in% intersect(QFT1$StudyID, QFT2$StudyID)))
 
 QFT<-rbindlist(list(QFT1, QFT2), fill=TRUE)
-QFT<-select(QFT, -RecID)
+QFT<-dplyr::select(QFT, -RecID)
 #recode all coenrolled individuals Study IDs to be the NK version
 #Keeps all entries for the baseline visit and removes all the entries with indeterminate QFT results
 #Removes the one discrepent column between the two original tables
@@ -182,38 +181,22 @@ QFT$QualResult[QFT$QualResult==2] <- as.character("HEALTHY CONTROL")
 QFT$StudyID<-as.character(QFT$StudyID)
 ```
 
-```{r HIV TBRU}
+```{r demographic NK}
 library(dplyr)
 setwd("/Applications/Old Computer/Epi Project/Data_original/")
-HIV_TBRU <- read.csv("TBRU HIV TEST RESULTS_2017_JAN_11.csv")
-HIV_TBRU$StudyID<-as.character(HIV_TBRU$StudyID)
-HIV_TBRU<-arrange(HIV_TBRU, StudyID)
-HIV_TBRU<-replace.btwn.tables(HIV_TBRU, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
-HIV_TBRU <-filter(HIV_TBRU, CurrVisit!="2")
-HIV_TBRU$HIVResult<-gsub("1", "POS", HIV_TBRU$HIVResult)
-HIV_TBRU$HIVResult<-gsub("2", "NEG", HIV_TBRU$HIVResult)
-```
-
-```{r demographic and clinical data both}
-library(dplyr)
-setwd("/Applications/Old Computer/Epi Project/Data_original/")
-TBRU<-read.csv("TBRU PARTICIPANT INFORMATION.csv")
-TBRU$StudyID<-as.character(TBRU$StudyID)
-TBRU<-arrange(TBRU, StudyID)
-TBRU<-replace.btwn.tables(TBRU, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
 
 Enrollment<-read.csv("NK Cell Study Enrollment Summary 2018_MAY_01.csv")
-Enrollment<-dplyr::rename(Enrollment, StudyID = STUDY.ID)
-Enrollment$StudyID<-as.character(Enrollment$StudyID)
+Enrollment<-dplyr::rename(Enrollment, StudyID = STUDY.ID, 
+                          HHC = Household.contact.treated.for.TB.within.past.2.yrs)
 
 both<-read.csv("TBRU & NK Cohort Information.csv")
 both$StudyID<-as.character(both$StudyID)
 both<-arrange(both, StudyID)
-both<-replace.btwn.tables(both, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
+both<-dplyr::select(both, -IgG, -OD)
 
-both<-dplyr::rename(both, IgG.both = IgG, OD.both =OD)
-Cohort<-read.csv("NK Cohort Samples.csv")
-Cohort$StudyID<-as.character(Cohort$StudyID)
+age<-subset(both, grepl("NK", both$StudyID)==TRUE)
+
+hiv<-read.csv("NK Cohort Samples.csv")
 
 xray<-read.csv("NK Study CXRreadingData_Clinical Database.csv")
 xray<-dplyr::select(xray, StudyID, Interpretation)%>%
@@ -222,13 +205,78 @@ xray$chest<-gsub( 1, "NORMAL", xray$chest)
 xray$chest<-gsub( 2, "ABNORMAL", xray$chest)
 xray$chest<-gsub( 3, "NOT TB", xray$chest)
 
-dfs<-list(TBRU, Cohort, both, Enrollment, xray)
-cohort<-join_all(dfs, by="StudyID", type="full")
+dfs<-list(Enrollment, age, hiv, xray)
+NK<-join_all(dfs, by="StudyID", type="full")
+#remove(Enrollment, age, hiv, xray, both, dfs)
+```
+
+```{r demographic TBRU}
+library(dplyr)
+setwd("/Applications/Old Computer/Epi Project/Data_original/")
+
+TRU<-read.csv("TBRU PARTICIPANT INFORMATION.csv")
+TRU$StudyID<-as.character(TRU$StudyID)
+TRU<-dplyr::arrange(TRU, StudyID)
+
+hiv<- read.csv("TBRU HIV TEST RESULTS_2017_JAN_11.csv")
+hiv$StudyID<-as.character(hiv$StudyID)
+hiv <-dplyr::filter(hiv, CurrVisit==1)
+hiv$HIVResult<-gsub("1", "POS", hiv$HIVResult)
+hiv$HIVResult<-gsub("2", "NEG", hiv$HIVResult)
+
+pt<-read.csv("C38_PREG TEST RESULTS.csv")
+pt<-dplyr::filter(pt, CurrVisit == 1)%>%
+    dplyr::select(StudyID, PregTestDone, ReasonTestND, PregTestResult)%>%
+    dplyr::rename(PT.RESULT = PregTestResult)
+#1 = positive, 2 = negative
+pt$PT.RESULT<-gsub(1, "POS", pt$PT.RESULT)
+pt$PT.RESULT<-gsub(2, "NEG", pt$PT.RESULT)
+
+xray<-read.csv("C55_CXR RESULTS.csv")
+xray<-dplyr::filter(xray, CurrVisit == 1)%>%
+    dplyr::select(StudyID, CXRDone, OtherReasXRayND, CXRResult)%>%
+    dplyr::rename(chest = CXRResult)
+#1 = normal, 2=abnormal
+xray$chest<-gsub( 1, "NORMAL", xray$chest)
+xray$chest<-gsub( 2, "ABNORMAL", xray$chest)
+xray$chest<-gsub( 3, "NOT TB", xray$chest)
+
+hb<-read.csv("C36_HB RESULTS.csv")
+hb<-dplyr::filter(hb, CurrVisit == 1)%>%
+    dplyr::select(StudyID, HbResult)%>%
+    dplyr::rename(Hb = HbResult)
+hb<-aggregate(Hb~StudyID, data=hb, FUN=mean)
+
+exp<-read.csv("C34_BASELINE TB EXPOSURE.csv")
+exp<- dplyr::select(exp, StudyID, TBCaseLst3Mnths)%>%
+    dplyr::rename(HHC = TBCaseLst3Mnths)
+exp$HHC <- gsub("1", "Yes", exp$HHC)
+exp$HHC <- gsub("2", "No", exp$HHC)
+
+dfs<-list(TRU, hiv, pt, xray, hb, exp)
+TBRU<-join_all(dfs, by="StudyID", type="full")
+TBRU<-arrange(TBRU, StudyID)
+TBRU<-replace.btwn.tables(TBRU, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
+#remove(TRU, pt, xray, hb, exp, hiv, dfs)
+```
+
+```{r demographic both}
+library(dplyr)
+inter<-intersect(NK$StudyID, TBRU$StudyID)
+NK_both<-filter(NK, StudyID %in% inter)
+TBRU_both<-filter(TBRU, StudyID %in% inter)
+both<-merge(NK_both, TBRU_both, by="StudyID")
+NK_unique<-filter(NK, !StudyID %in% inter)
+TBRU_unique<-filter(TBRU, !StudyID %in% inter)
+dfs<-list(NK_unique, TBRU_unique, both)
+cohort<-rbindlist(dfs, fill=TRUE)
+
+#cohort<-dplyr::select(cohort,)
 ```
 
 ```{r Merge remove pilot samples duplicates and misentered participants}
 library(dplyr)
-dfs<-list(cohort, QFT, HIV_TBRU, Helminth)
+dfs<-list(cohort, QFT, Helminth)
 Total<-join_all(dfs, by="StudyID", type="full")
 
 library(dplyr)
@@ -240,10 +288,9 @@ pilot<-list("NK2000","NK2001", "NK2002", "NK2003","NK2004", "NK2005", "NK2006","
 dups_before<-Total$StudyID[duplicated(Total$StudyID)]
 
 Total<-dplyr::filter(Total, !(LabNo %in% LabNos)) %>%
-  dplyr::filter(!StudyID %in% IDs) %>%
-    dplyr::filter(!(StudyID %in% pilot))
-
-Total<-select(Total, -DATE.CONSENTED, -ResultDate, -EntryDate, -Created, -Modified, -RowVersion,-DateFormFilled, -HIVtestDate, -DateQCDone)
+    dplyr::filter(!StudyID %in% IDs) %>%
+    dplyr::filter(!(StudyID %in% pilot))%>%
+    dplyr::select(-DATE.CONSENTED, -ResultDate, -EntryDate, -Created, -Modified, -RowVersion,-DateFormFilled, -HIVtestDate, -DateQCDone)
 Total<-unique(Total)
 
 dups_after<-Total$StudyID[duplicated(Total$StudyID)]
@@ -270,83 +317,6 @@ Total$Hb[grepl("PENDING|Other", Total$Hb)]<-NA
 Total$CD4[grepl("N/A", Total$CD4)]<-NA
 Total$CD4.COUNT[grepl("N/A", Total$CD4.COUNT)]<-NA
 Total$CD4.COUNT[grepl("Other", Total$CD4.COUNT)]<-NA
-
-
-
-```
-
-```{r tb clinical stuff}
-Total$chest.xray<-tolower(Total$CXR.REPORT)
-Total$chest.xray[grepl("abnormal|cardiomegaly", Total$chest.xray)]<-"abnormal"
-Total$chest.xray[grepl("n/a|not done", Total$chest.xray)]<-NA
-Total$chest.xray[grepl("no", Total$chest.xray) &! grepl("rmal", Total$chest.xray)]<-NA
-Total$chest.xray[Total$chest.xray=="pending"]<-NA
-Total$chest.xray[Total$chest.xray==""]<-NA
-
-Total$gene.expert<-tolower(Total$EXPERT.RESULTS)
-Total$gene.expert[grepl("n/a|no sample|error", Total$gene.expert)]<-NA
-Total$gene.expert[grepl("no rif", Total$gene.expert)]<-"rif sensitive"
-Total$gene.expert[Total$gene.expert==""]<-NA
-
-Total$hain<-tolower(Total$HAIN.TEST.RESULTS)
-Total$hain[grepl("invalid|n/a|no sample", Total$hain)]<-NA
-Total$hain[Total$hain==""]<-NA
-
-Total$mgit<-tolower(Total$MGIT.Culture)
-Total$mgit[grepl("mott", Total$mgit)]<-"NTM"
-Total$mgit[grepl("pos", Total$mgit)]<-"MTB"
-Total$mgit[grepl("culture contaminated|n/a|no sample", Total$mgit)]<-NA
-Total$mgit[Total$mgit==""]<-NA
-
-Total$microscopy<-tolower(Total$FM..RESULTS)
-Total$microscopy[grepl("n/a|no sample", Total$microscopy)]<-NA
-Total$microscopy[Total$microscopy==""]<-NA
-
-Total$INH.Resistant<-NA
-for(i in 1:length(Total$INH.Resistant)){
-    if(grepl("resistant to inh", Total$hain[i])){
-        Total$INH.Resistant[i]<-1}
-    
-    else if(grepl("sensitive to inh", Total$hain[i])){
-        Total$INH.Resistant[i]<-0}
-    
-    else {Total$INH.Resistant[i]<-NA}
-}
-
-Total$Rif.Resistant<-NA
-for(i in 1:length(Total$Rif.Resistant)){
-    if(grepl("resistant to rif", Total$hain[i])){
-        Total$Rif.Resistant[i]<-1}
-    
-    else if(grepl("sensitive to rif", Total$hain[i])){
-        Total$Rif.Resistant[i]<-0}
-        
-    else if(grepl("sensitive to inh and rif", Total$hain[i])){
-        Total$Rif.Resistant[i]<-0}
-    
-    else if(grepl("rif sensitive", Total$gene.expert[i])){
-        Total$Rif.Resistant[i]<-0}    
-
-    else {Total$Rif.Resistant[i]<-NA}
-}
-
-Total$Drug.Resistant<-NA
-for(i in 1:length(Total$Drug.Resistant)){
-    if(!is.na(Total$INH.Resistant[i]) & Total$INH.Resistant[i]==1){
-        Total$Drug.Resistant[i]<-1}
-    
-    else if(!is.na(Total$Rif.Resistant[i]) & Total$Rif.Resistant[i]==1){
-        Total$Drug.Resistant[i]<-1}
-    
-    else if(!is.na(Total$gene.expert[i]) & Total$gene.expert[i]=="pos"){
-        Total$Drug.Resistant[i]<-1} 
-    
-    else if(!is.na(Total$INH.Resistant[i]) & Total$INH.Resistant[i]=="0" &
-            !is.na(Total$Rif.Resistant[i]) & Total$Rif.Resistant[i]=="0"){
-        Total$Drug.Resistant[i]<-0}
-
-    else {Total$Drug.Resistant[i]<-NA}
-}
 ```
 
 ```{r updating study and location data}
@@ -434,18 +404,22 @@ for (i in 1:length(Total$ART)){
     else if(!is.na(Total$ARTInitiated[i])){
         Total$ART[i] <- Total$ARTInitiated[i]}
 } 
+Total$ART<-gsub("0", "NO", Total$ART)
 
 Total$IPT<-NA
 for(i in 1:length(Total$IPT)){
     if(!is.na(Total$IPTInitiated[i])){
-        Total$IPT[i]<-Total$IPTInitiated[i]}
+        Total$IPT[i]<-as.character(Total$IPTInitiated[i])}
         
     else if(!is.na(Total$ON.ANTI.TB.DRUGS[i])){
-        Total$IPT[i] <- Total$ON.ANTI.TB.DRUGS[i]}  
+        Total$IPT[i] <- as.character(Total$ON.ANTI.TB.DRUGS[i])}  
     
     else {
         Total$IPT[i] <- NA}
 }
+Total$IPT<-gsub("0", "NO", Total$IPT)
+Total$IPT<-gsub("2", NA, Total$IPT)
+Total$IPT<-gsub("N/A", NA, Total$IPT)
 
 Total$TB<-NA
 for (i in 1:length(Total$TB)){
@@ -460,6 +434,107 @@ for (i in 1:length(Total$TB)){
     
     else{
         Total$TB[i] <- as.character(Total$QFT.RESULTS[i])} 
+}
+
+Total$chest.xray<-NA
+for (i in 1:length(Total$chest.xray)){
+    if(!is.na(Total$CXR.REPORT[i])){
+        Total$chest.xray[i] <- as.character(Total$CXR.REPORT[i])}
+    
+    else if(!is.na(Total$chest[i])){
+        Total$chest.xray[i] <- as.character(Total$chest[i])} 
+      
+    else if(!is.na(Total$chest.y[i])){
+        Total$chest.xray[i] <- as.character(Total$chest.y[i])} 
+    
+    else{
+        Total$chest.xray[i] <- as.character(Total$chest.x[i])} 
+}
+
+Total$HB<-NA
+for (i in 1:length(Total$HB)){
+    if(!is.na(Total$Hb[i])){
+        Total$HB[i] <- as.character(Total$Hb[i])}
+    
+    else if(!is.na(Total$Gender[i])){
+        Total$HB[i] <- as.character(Total$Hb.x[i])} 
+
+    else{
+        Total$HB[i] <- as.character(Total$Hb.y[i])} 
+}
+```
+
+```{r tb bacteria stuff}
+Total$chest.xray<-tolower(Total$chest.xray)
+Total$chest.xray[grepl("abnormal|cardiomegaly", Total$chest.xray)]<-"abnormal"
+Total$chest.xray[grepl("n/a|not done", Total$chest.xray)]<-NA
+Total$chest.xray[grepl("no", Total$chest.xray) &! grepl("rmal", Total$chest.xray)]<-NA
+Total$chest.xray[Total$chest.xray=="pending"]<-NA
+Total$chest.xray[Total$chest.xray==""]<-NA
+
+Total$gene.expert<-tolower(Total$EXPERT.RESULTS)
+Total$gene.expert[grepl("n/a|no sample|error", Total$gene.expert)]<-NA
+Total$gene.expert[grepl("no rif", Total$gene.expert)]<-"rif sensitive"
+Total$gene.expert[Total$gene.expert==""]<-NA
+
+Total$hain<-tolower(Total$HAIN.TEST.RESULTS)
+Total$hain[grepl("invalid|n/a|no sample", Total$hain)]<-NA
+Total$hain[Total$hain==""]<-NA
+
+Total$mgit<-tolower(Total$MGIT.Culture)
+Total$mgit[grepl("mott", Total$mgit)]<-"NTM"
+Total$mgit[grepl("pos", Total$mgit)]<-"MTB"
+Total$mgit[grepl("culture contaminated|n/a|no sample", Total$mgit)]<-NA
+Total$mgit[Total$mgit==""]<-NA
+
+Total$microscopy<-tolower(Total$FM..RESULTS)
+Total$microscopy[grepl("n/a|no sample", Total$microscopy)]<-NA
+Total$microscopy[Total$microscopy==""]<-NA
+
+Total$INH.Resistant<-NA
+for(i in 1:length(Total$INH.Resistant)){
+    if(grepl("resistant to inh", Total$hain[i])){
+        Total$INH.Resistant[i]<-1}
+    
+    else if(grepl("sensitive to inh", Total$hain[i])){
+        Total$INH.Resistant[i]<-0}
+    
+    else {Total$INH.Resistant[i]<-NA}
+}
+
+Total$Rif.Resistant<-NA
+for(i in 1:length(Total$Rif.Resistant)){
+    if(grepl("resistant to rif", Total$hain[i])){
+        Total$Rif.Resistant[i]<-1}
+    
+    else if(grepl("sensitive to rif", Total$hain[i])){
+        Total$Rif.Resistant[i]<-0}
+        
+    else if(grepl("sensitive to inh and rif", Total$hain[i])){
+        Total$Rif.Resistant[i]<-0}
+    
+    else if(grepl("rif sensitive", Total$gene.expert[i])){
+        Total$Rif.Resistant[i]<-0}    
+
+    else {Total$Rif.Resistant[i]<-NA}
+}
+
+Total$Drug.Resistant<-NA
+for(i in 1:length(Total$Drug.Resistant)){
+    if(!is.na(Total$INH.Resistant[i]) & Total$INH.Resistant[i]==1){
+        Total$Drug.Resistant[i]<-1}
+    
+    else if(!is.na(Total$Rif.Resistant[i]) & Total$Rif.Resistant[i]==1){
+        Total$Drug.Resistant[i]<-1}
+    
+    else if(!is.na(Total$gene.expert[i]) & Total$gene.expert[i]=="pos"){
+        Total$Drug.Resistant[i]<-1} 
+    
+    else if(!is.na(Total$INH.Resistant[i]) & Total$INH.Resistant[i]=="0" &
+            !is.na(Total$Rif.Resistant[i]) & Total$Rif.Resistant[i]=="0"){
+        Total$Drug.Resistant[i]<-0}
+
+    else {Total$Drug.Resistant[i]<-NA}
 }
 ```
 
@@ -517,6 +592,20 @@ Total$WHO.STAGE[Total$HIV=="NEG"]<-0
 Total$QFT[Total$TB=="ACTIVE"]<-"not done"
 Total$cd4[Total$HIV=="NEG"]<-"not done"
 Total$chest.xray[Total$TB=="ACTIVE"]<-"not done"
+Total$RACE<-"Black African"
+Total$IPT[Total$TB != "ACTIVE"]<-"NO"
+Total$ART[Total$HIV == "NEG"]<-"NO"
+```
+
+```{r ineligible people}
+setwd("/Applications/Old Computer/Epi Project/Data_original/")   
+eligible<-read.csv("K11_ELIGIBILITY1.csv")
+#2 is ineligible and 1 is eligible
+ex1<-as.character(eligible$StudyID[eligible$Eligible==2])
+ineligible<-read.csv("QFT.missing.csv")
+ex2<-as.character(ineligible$StudyID[ineligible$Comments!=""])
+exclude<-c(ex1, ex2)
+Total<-dplyr::filter(Total, !StudyID %in% exclude)
 ```
 
 ```{r Separate into Data Tables to get missing data}
@@ -524,31 +613,31 @@ Total$chest.xray[Total$TB=="ACTIVE"]<-"not done"
 library(dplyr)
 setwd("/Applications/Old Computer/Epi Project/Data_clean/")
 library(dplyr)
-Dates<-select(Total, StudyID, Date.Consented, Date.Enrolled, ART.Start.Date, DATE.ANTI.TB.STARTED, Days.on.TB.Tx)
+#Dates<-select(Total, StudyID, Date.Consented, Date.Enrolled, ART.Start.Date, DATE.ANTI.TB.STARTED, Days.on.TB.Tx)
 
-Total<-select(Total, -UserCode, -CurrVisit, -FollUpVisit, -StaffInitials, -HIVtestDone, -ReasonTestND, -OtherReasonTestND, -Comments, -QCStaffInitials, -EntryUserInitials, CPTs.Collected, Cell.Counts..x10.6., Baseline.Completion.Report, Sample.Storage, -IgG.both, -OD.both, -Date.Enrolled, -REASON, -CPTs.Collected, -Cell.Counts..x10.6., -Baseline.Completion.Report, -Sample.Storage, -STATUS, -Visit, -RecID, -COENRLD.STUDY, -Date.Consented, -Date.Enrolled, -ART.Start.Date, -DATE.ANTI.TB.STARTED, -REFERRAL.POINT, -QFTType, -TBAntigen2, -QualResult, -SCREENING.ARM, -Screening.Arm, -QFT.RESULTS, -IPTInitiated, -ON.ANTI.TB.DRUGS, -On.ART., -ARTInitiated, -AGE, -Age, -SEX, -Gender, -Sex, -HIV.status, -HIVResult, -HIV.STATUS, -CD4, -CD4.COUNT, -VL, -Viral.Load)###Still need to remove original TB exam columns
+Total<-dplyr::select(Total, -UserCode, -CurrVisit, -FollUpVisit, -StaffInitials, -HIVtestDone, -ReasonTestND, -OtherReasonTestND, -Comments, -QCStaffInitials, -EntryUserInitials, CPTs.Collected, Cell.Counts..x10.6., Baseline.Completion.Report, Sample.Storage, -Date.Enrolled, -REASON, -CPTs.Collected, -Cell.Counts..x10.6., -Baseline.Completion.Report, -Sample.Storage, -STATUS, -Visit, -RecID, -COENRLD.STUDY, -Date.Consented, -Date.Enrolled, -ART.Start.Date, -DATE.ANTI.TB.STARTED, -REFERRAL.POINT, -QFTType, -TBAntigen2, -QualResult, -SCREENING.ARM, -Screening.Arm, -QFT.RESULTS, -IPTInitiated, -ON.ANTI.TB.DRUGS, -On.ART., -ARTInitiated, -AGE, -Age, -SEX, -Gender, -Sex, -HIV.status, -HIVResult, -HIV.STATUS, -CD4, -CD4.COUNT, -VL, -Viral.Load)###Still need to remove original TB exam columns
 
-sputum.missing<-select(Total, StudyID, TB, HIV, CXR.REPORT, FM..RESULTS, EXPERT.RESULTS, HAIN.TEST.RESULTS, MGIT.Culture, Days.to.MGIT.Culture.)%>%
+sputum.missing<-dplyr::select(Total, StudyID, TB, HIV, CXR.REPORT, FM..RESULTS, EXPERT.RESULTS, HAIN.TEST.RESULTS, MGIT.Culture, Days.to.MGIT.Culture.)%>%
     filter(is.na(TB)|TB=="ACTIVE"|HIV=="POS")%>%
     filter(is.na(FM..RESULTS)|is.na(EXPERT.RESULTS)|is.na(HAIN.TEST.RESULTS)|is.na(MGIT.Culture))
 
-QFT.missing<-select(Total, StudyID, TB, NIL, TBAntigen, Mitogen, QFT)%>%
+QFT.missing<-dplyr::select(Total, StudyID, TB, NIL, TBAntigen, Mitogen, QFT)%>%
     filter(is.na(QFT))
 
-chest.missing<-select(Total, StudyID, TB, CXR.REPORT, Days.on.TB.Tx, Household.contact.treated.for.TB.within.past.2.yrs, Treated.for.TB.Previously.)%>%
-    filter(is.na(TB)|is.na(CXR.REPORT)|is.na(Household.contact.treated.for.TB.within.past.2.yrs))
+chest.missing<-dplyr::select(Total, StudyID, TB, CXR.REPORT, Days.on.TB.Tx, HHC, Treated.for.TB.Previously.)%>%
+    filter(is.na(TB)|is.na(CXR.REPORT)|is.na(HHC))
 
-TB.missing<-select(Total, StudyID, TB, CXR.REPORT, FM..RESULTS, EXPERT.RESULTS, HAIN.TEST.RESULTS, MGIT.Culture, Days.on.TB.Tx, Household.contact.treated.for.TB.within.past.2.yrs, Treated.for.TB.Previously., NIL, TBAntigen, Mitogen, QFT)%>%
+TB.missing<-dplyr::select(Total, StudyID, TB, chest.xray, gene.expert, hain, mgit, microscopy, Days.on.TB.Tx, HHC, Treated.for.TB.Previously., NIL, TBAntigen, Mitogen, QFT)%>%
     filter(is.na(TB))
 
-Hel.missing<-select(Total, StudyID, HelminthPositive, AscarisPositive, TricurisPositive, SchistosomaPositive, HookwormPositive, SchistosomaIntensity)%>%
+Hel.missing<-dplyr::select(Total, StudyID, HelminthPositive, AscarisPositive, TricurisPositive, SchistosomaPositive, HookwormPositive, SchistosomaIntensity)%>%
     filter(is.na(HelminthPositive))
 
-Demographic.missing<-select(Total, StudyID, age, sex, SCREENING.SITE, RACE,
+Demographic.missing<-dplyr::select(Total, StudyID, age, sex, SCREENING.SITE, RACE,
                             MAL.TEST.RESULTS, PT.RESULT, Hb)%>%
-    filter(is.na(RACE) | is.na(age) | is.na(SCREENING.SITE) | is.na(Hb))
+    filter(is.na(RACE) | is.na(age) | is.na(SCREENING.SITE) | is.na(Hb) | is.na(MAL.TEST.RESULTS))
 
-HIV.missing<-select(Total, StudyID, HIV, cd4, viral.load, WHO.STAGE)%>%
+HIV.missing<-dplyr::select(Total, StudyID, HIV, cd4, viral.load, WHO.STAGE)%>%
     filter(!(WHO.STAGE %in% c("1","3")))%>%
     filter(HIV!="NEG")
 
@@ -558,11 +647,18 @@ write.csv(Hel.missing, "missing-helminth.csv")
 write.csv(Demographic.missing, "missing-demographic.csv")
 write.csv(HIV.missing, "missing-HIV.csv")
 write.csv(Total, "complete-kenya.csv")
+write.csv(QFT.missing, "QFT.missing.csv")
+write.csv(chest.missing, "chest.missing.csv")
+write.csv(TB.missing, "TB.missing.csv")
+write.csv(sputum.missing, "sputum.missing.csv")
 
-sumNA<-colSums(is.na(Total))
-miss.var<-rbind(names(Total), sumNA)
-sumNA2<-rowSums(is.na(Total))
-miss.donor<-cbind(Total$StudyID, sumNA2)
+miss.var<-data.frame(colSums(is.na(Total)))
+miss.donor<-data.frame(cbind(Total$StudyID, rowSums(is.na(Total))))
+
+write.csv(miss.donor, "NAs per donor.csv")
 ```
 
+```{r load and insert missing data}
+
+```
 
