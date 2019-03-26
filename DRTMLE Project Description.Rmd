@@ -1,0 +1,77 @@
+---
+title: "Untitled"
+author: "Taryn McLaughlin"
+date: "11/26/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+df<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/complete-kenya.csv")
+```
+
+##Brief Overview
+I will be using two statistical packages in R-Super Learner and drtmle- which take advantage of machine learning techniques to estimate the population level effect of HIV and S. mansoni infection on Tuberculosis status while controlling for standard covariates.
+
+##Background
+Randomized clinical trials (RCT) have long been the gold standard to assess causal relationships between variables in biomedical and epidmiological reserach. This is largely due to the inherent ability of RCTs to control for confounding variables by randomly assigning different levels of an exposure or treatment to individuals. Thus any potential relationship between confounding varaibles and the treatment itself is broken. In many cases, however, clinical trials are infeasible for logistical or ethical reasons. In these instances other study designs, such as cohort and case-control studies, must be utilized. These studies collect purely observational data which may be used to estimate associations between an exposure and a disease outcome but, up to now, have not been used to evaluate a causal relationship. Modern computational tools have allowed for the development of statistical methods to meet this need by using machine learning to model "the counterfactual."
+
+In epidemiology, the counterfactual is essentially a thought experiment wherein we can measure an outcome under different different levels of an exposure or treatment in the same exact population. In mathematics this can be modeled using two nuisance parameters:
+1. The outcome regression (OR): describes the relationship between the outcome of interest and a set of covariates (including the exposure of interest). In other words, what is the probability of person X having Tuberculosis given some S. mansoni infection status and "W" set of covariates.
+2. The propensity score (PS): describes the relationship between the exposure of interest and the covariates. In other words, how likely is it that person X is infected with S. mansoni given "W" set of covariates. 
+
+Using these two parameters, we can estimate the population level effect of an exposure by evaluating the marginal mean outcome under each level of the exposure. We do this by assigining each level of a treatment to every person in the data set and then calculating the outcome of interest under each of these conditions. In my case, I will be estimating the proportion of individuals in the study that would have latent or active Tuberculsois if everyone in the study was S. mansoni positive versus if everyone was S. mansoni negative. I will stratify this analysis by HIV status to determine if there is an interaction between HIV infection and S. mansoni infection. As a secondary analysis, I will estimate the effect of Tuberculosis status on the severity of S. mansoni infection by using Schistosoma Egg burden as a proxy outcome. 
+
+Below is a mock table shell for what a report of this analysis will look like.
+
+##Super Learner
+
+While both parameters can be estimated using something as simple as logistic regression, such models often make assumptions about the data that break down with more complex data. This can lead to large bias when estimating population level effects. If more flexible methods are utilized to estimate these nuisance parameters instead, models can be built that better fit the data and therefore lead to better downstream estimates.
+
+Super Learner is a package available in R that takes a library of candidate regression models and evaluates their fit by minimizing V-fold cross-validated risk. Essentially, the better the model predicts the outcome for the data, the lower the risk, the "better"" the model. Super Learner then creates an ensemble model that draws on all the candidate models. Previous literature based on the Oracle Inequality has demonstrated that Super Learner performs as well as the best unknown regression. It can be thought of as the closest you can get to the true regression without actually knowing what that regression is. As such, it generates the most reliable and consistent estimators for both the outcome regression and the propensity score.
+
+##DRTMLE
+While flexible estimators give us the best chance of correctly estimating our outcome of interest, they present challenges in performing inference. Previous literature has shown that when using adaptive estimators of the OR and PS, valid inference using standard methods can only be done when both the OR and PS are consistently estimated. While Super Learner does a good job, we want to ensure that we are coming to erroneous conclusions. 
+
+The drtmle package in R estimates the marginal outcome of interest while performing additional calculations to ensure "doubly robust" estimates. In other words, even if one of our nuisance parameters is a little off, we are still getting reliable final estimates. Important to our statistical analysis, is that drtmle provides reliable measures for both the outcome of interest as well as ?????? bleh bleh.
+
+Furthermore, drtmle provides a framework to account for missing data in both the outcome as well as the exposure of interest, thus allowing us to maximize the information gained from the data.
+
+##Statistical Analysis
+drtmle can directly calculate the estimated proportions used in our hypothesis tests
+H0: The distribution of individuals in the 3 categories- Healthy Control, LTBI, Active TB- if everyone was infected with S. mansoni is equivalent to the distribution of individuals if everyone was not infected with S. mansoni.
+This is actually a joint hypothesis test of the following two null hypotheses
+H01: The proportion of individuals with LTBI - The pro
+
+#Variables used
+Covariates used in the Super Learner Models.
+Age
+Sex
+Screening Site
+Hemoglobin level
+Pregnancy Test Results
+QFT Results
+Malaria Infection
+Ascaris Infection
+Tricuris Infection
+Hookworm Infection
+Schistosoma Egg Count
+HIV Infection
+Viral Load
+CD4 Count
+
+In addition to the above variables, there are a number of variables that will not be used in the statistical analysis, but are still relevant demographic and clinical features of the cohort. As such, they will be reported as a part of the description of the study participants.
+
+Race: The entire cohort is Black African. Zero Variance variables (i.e. there is only one value) can make machine learning algorithms unstable. As such, this is being excluded from the analysis.
+Chest X-ray: proportion of individuals with abnormal chest x-rays
+Drug Resistance: proportion of individuals with INH and/or Rifampicin resistant mtb infection
+Days to Mgit Culture Positivity: A proxy for bacterial burden in individuals with active TB
+ART Therapy: proportion of individuals on ART
+IPT: proportion of individuals on IPT
+
+I've included a mock table shell for this part of the analysis. 
+
+```{r}
+
+```
+

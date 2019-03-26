@@ -198,13 +198,13 @@ SL.LTBI_DeltaY <- SuperLearner(
 
 # lastly regress Y on A + W | DeltaY = 1
 SL.LTBI_Q <- SuperLearner(
-    Y = dplyr::filter(dat, DeltaY == 1)[,y], ####???
-    # our predictors are all variables except for LTBI, SM and whether we observed SM/LTBI
+    Y = dplyr::filter(dat, DeltaY == 1)[,y],
+    # our predictors are all variables except for LTBI and whether we observed SM/LTBI
     # for all rows where DeltaY = 1 (aka where we observe Y)
     X = dplyr::filter(dat, DeltaY == 1)%>%
-        dplyr::select(-DeltaA, -DeltaY, -SM, -y),
+        dplyr::select(-DeltaA, -DeltaY, -y,),####had to take out SM to make it work but SM should be included
     # newx so that the SL.pred returns a vector the full length of the data set --->>
-    newX = dplyr::select(dat, -DeltaA, -DeltaY, -SM, -y), 
+    newX = dplyr::select(dat, -DeltaA, -DeltaY, -y), 
     family = binomial(), 
     SL.library = c("SL.glm","SL.mean"),
     method = "method.CC_nloglik",
@@ -340,3 +340,7 @@ IC_LTBI_HIVP<-fit_LTBI_HIVpos$ic_drtmle$ic
 
 ```
 
+```{r}
+IC<-cbind(IC_LTBI_HIVN, IC_TB_HIVN)
+#solve(cov(IC)) or ginv if solve breaks
+```

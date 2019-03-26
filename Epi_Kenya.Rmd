@@ -12,11 +12,14 @@ library(dplyr)
 setwd("/Applications/Old Computer/Epi Project/Data_original/")
 Coenrolled<-read.csv("NK_TBRU Co-enrolled SIDs 2018_AUG_14.csv")
 Coenrolled<-arrange(Coenrolled, TBRU.STUDY.ID)
+Coenrolled$Joint.Study.ID<-paste(Coenrolled$NK.STUDY.ID, Coenrolled$TBRU.STUDY.ID, sep="_")
 ```
 
 ```{r functions for data cleaning}
 replace.btwn.tables<-function(datatable1, datatable2, var, ref.var, new.vals){
     library(dplyr)
+    datatable1<-arrange(datatable1, datatable1[,var])
+    datatable2<-arrange(datatable2, datatable2[,ref.var])
     inter <- intersect(datatable1[,var], datatable2[,ref.var])
     tbl1a <- subset(datatable1, datatable1[,var] %in% inter)
     tbl1b <- subset(datatable1, !(datatable1[,var] %in% inter))
@@ -29,6 +32,8 @@ replace.btwn.tables<-function(datatable1, datatable2, var, ref.var, new.vals){
 
 replace.btwn.tables2<-function(datatable1, datatable2, id.var, ref.var, new.var, new.vals){
     library(dplyr)
+    datatable1<-arrange(datatable1, datatable1[,id.var])
+    datatable2<-arrange(datatable2, datatable2[,ref.var])
     inter <- intersect(datatable1[,id.var], datatable2[,ref.var])
     tbl1a <- subset(datatable1, datatable1[,id.var] %in% inter)
     tbl1b <- subset(datatable1, !(datatable1[,id.var] %in% inter))
@@ -120,7 +125,7 @@ Helminth<-join_all(dfs, by="StudyID")
 Helminth<-mutate(Helminth, Number=AscarisPositive + TricurisPositive + SchistosomaPositive + HookwormPositive)%>%
     arrange(StudyID)
 Helminth$StudyID<-as.character(Helminth$StudyID)
-Helminth<-replace.btwn.tables(Helminth, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
+Helminth<-replace.btwn.tables(Helminth, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
 ```
 
 ```{r QFT Both}
@@ -140,21 +145,34 @@ QFT1b <- filter(QFT1b, !(StudyID %in% inter))%>%
 l<-list(QFT1a, QFT1b)
 QFT1<-data.frame(rbindlist(l, fill = TRUE))
 QFT1$StudyID<-as.character(QFT1$StudyID)
-QFT1<-replace.btwn.tables(QFT1, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
+QFT1<-replace.btwn.tables(QFT1, Coenrolled, "StudyID", "NK.STUDY.ID", "Joint.Study.ID")
 #after a lot of digging around with duplicates I noticed that one person was being coded incorrectly after this
 
-QFT2<-read.csv("TBRU_QFTResults_Main 2017_AUG_18.csv")
-QFT2<-splitter(QFT2, "StudyID", "-", one="StudyID", two="Visit")
-QFT2<-arrange(QFT2, StudyID)%>%
-    filter(Visit==0 & QualResult!=3)
-QFT2<-replace.btwn.tables(QFT2, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
+QFT2a<-read.csv("TBRU_QFTResults_Main 2017_AUG_18.csv")
+QFT2b<-read.csv("TBRUKE_Data_Main_C50.csv")
+#QFT2c<-read.csv("TBRUKE_Data_Main_QFT_Lab_db.csv") --->>> same as QFT2a except date entries
+QFT2a<-splitter(QFT2a, "StudyID", "-", one="StudyID", two="Visit")
+QFT2a<-dplyr::filter(QFT2a, Visit!="s",  Visit!="S", QualResult!=3)%>%
+    filter(RecID!=3629)
+
+QFT2b<-dplyr::rename(QFT2b, NIL = Nil, TBAntigen = TBAg, QualResult = QFTResult, 
+                     Visit = CurrVisit, ResultDate = QFTResultDate, QFTType = QFTTestUsed)%>%
+    filter(is.na(Visit)|Visit==1, QualResult!=3)%>%
+    filter(RecID!=11, RecID!=22, RecID!=16, RecID!=76, RecID!=175, RecID!=128, RecID!=4345,
+           RecID!=4351, RecID!=89, RecID!=95, RecID!=90, RecID!=3344, RecID!=144,
+           RecID!=124, RecID!=139, RecID!=1272, RecID!=5354, RecID!=211)%>%
+    filter((StudyID %in% QFT2a$StudyID)==FALSE)
+
+##code to find duplicates in each table
+QFT2<-rbindlist(list(QFT2a, QFT2b), fill=TRUE)
+QFT2<-as.data.frame(arrange(QFT2, StudyID))
+#recode all coenrolled individuals Study IDs to be the NK version
+QFT2<-replace.btwn.tables(QFT2, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
 QFT2<-filter(QFT2, !(StudyID %in% intersect(QFT1$StudyID, QFT2$StudyID)))
 
 QFT<-rbindlist(list(QFT1, QFT2), fill=TRUE)
-QFT<-dplyr::select(QFT, -RecID)
-#recode all coenrolled individuals Study IDs to be the NK version
-#Keeps all entries for the baseline visit and removes all the entries with indeterminate QFT results
 #Removes the one discrepent column between the two original tables
+QFT<-dplyr::select(QFT, -RecID)
 #There are complete entries in both original CSV documents so this removes those duplicates
 QFT<-unique(QFT)
 #There are still duplicated Study IDs though... deal with later
@@ -207,6 +225,8 @@ xray$chest<-gsub( 3, "NOT TB", xray$chest)
 
 dfs<-list(Enrollment, age, hiv, xray)
 NK<-join_all(dfs, by="StudyID", type="full")
+NK<-replace.btwn.tables(NK, Coenrolled, "StudyID", "NK.STUDY.ID", "Joint.Study.ID")
+
 #remove(Enrollment, age, hiv, xray, both, dfs)
 ```
 
@@ -256,7 +276,7 @@ exp$HHC <- gsub("2", "No", exp$HHC)
 dfs<-list(TRU, hiv, pt, xray, hb, exp)
 TBRU<-join_all(dfs, by="StudyID", type="full")
 TBRU<-arrange(TBRU, StudyID)
-TBRU<-replace.btwn.tables(TBRU, Coenrolled, "StudyID", "TBRU.STUDY.ID", "NK.STUDY.ID")
+TBRU<-replace.btwn.tables(TBRU, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
 #remove(TRU, pt, xray, hb, exp, hiv, dfs)
 ```
 
@@ -269,9 +289,9 @@ both<-merge(NK_both, TBRU_both, by="StudyID")
 NK_unique<-filter(NK, !StudyID %in% inter)
 TBRU_unique<-filter(TBRU, !StudyID %in% inter)
 dfs<-list(NK_unique, TBRU_unique, both)
-cohort<-rbindlist(dfs, fill=TRUE)
-
-#cohort<-dplyr::select(cohort,)
+cohort<-as.data.frame(rbindlist(dfs, fill=TRUE))
+cohort<-replace.btwn.tables(cohort, Coenrolled, "StudyID", "NK.STUDY.ID", "Joint.Study.ID")
+cohort<-replace.btwn.tables(cohort, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
 ```
 
 ```{r Merge remove pilot samples duplicates and misentered participants}
@@ -642,7 +662,6 @@ HIV.missing<-dplyr::select(Total, StudyID, HIV, cd4, viral.load, WHO.STAGE)%>%
     filter(HIV!="NEG")
 
 #have to run these at the console for whatever reason --> try the date/time thing again
-write.csv(TB.missing, "missing-tb.csv")
 write.csv(Hel.missing, "missing-helminth.csv")
 write.csv(Demographic.missing, "missing-demographic.csv")
 write.csv(HIV.missing, "missing-HIV.csv")
@@ -658,7 +677,105 @@ miss.donor<-data.frame(cbind(Total$StudyID, rowSums(is.na(Total))))
 write.csv(miss.donor, "NAs per donor.csv")
 ```
 
-```{r load and insert missing data}
+```{r load and insert missing data from manual entries}
+setwd("/Applications/Old Computer/Epi Project/Data_clean/")
+
+#Fill in Helminth data from primary study files
+Hel.manual<- read.csv("missing-helminth_post.csv")
+Hel.manual<- filter(Hel.manual, StudyID %in% Hel.missing$StudyID)
+Total2<-replace.btwn.tables2(Total, Hel.manual, "StudyID", "StudyID", "HelminthPositive", "HelminthPositive")
+Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "AscarisPositive", "AscarisPositive")
+Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "TricurisPositive", "TricurisPositive")
+Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "SchistosomaPositive", "SchistosomaPositive")
+Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "HookwormPositive", "HookwormPositive")
+Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "SchistosomaIntensity", "SchistosomaIntensity")
+
+#Fill in HIV data from primary study files
+HIV.manual<- read.csv("missing-HIV_post.csv")
+HIV.manual<- filter(HIV.manual, StudyID %in% HIV.missing$StudyID)
+Total2<-replace.btwn.tables2(Total2, HIV.manual, "StudyID", "StudyID", "cd4", "cd4")
+Total2<-replace.btwn.tables2(Total2, HIV.manual, "StudyID", "StudyID", "viral.load", "viral.load")
+Total2<-replace.btwn.tables2(Total2, HIV.manual, "StudyID", "StudyID", "WHO.STAGE", "WHO.STAGE")
+
+#Fill in QFT data
+QFT.manual<- read.csv("QFT.missing_post.csv")
+QFT.manual<- filter(QFT.manual, StudyID %in% QFT.missing$StudyID)
+Total2<-replace.btwn.tables2(Total2, QFT.manual, "StudyID", "StudyID", "NIL", "NIL")
+Total2<-replace.btwn.tables2(Total2, QFT.manual, "StudyID", "StudyID", "TBAntigen", "TBAntigen")
+Total2<-replace.btwn.tables2(Total2, QFT.manual, "StudyID", "StudyID", "Mitogen", "Mitogen")
+Total2$TBAntigen<-as.numeric(Total2$TBAntigen)
+Total2$Mitogen<-as.numeric(Total2$Mitogen)
+Total2$NIL<-as.numeric(Total2$NIL)
+Total2$QFT <- (Total2$TBAntigen-Total2$NIL)
+Total2$Control <- (Total2$Mitogen-Total2$NIL)
+Total2$QFT[Total2$QFT<0]<-0
+Total2$Control[Total2$Control<0]<-0
+Total2$QualResult[Total2$QFT>0.35]<- 1
+Total2$QualResult[Total2$QualResult==1] <- as.character("LTBI")
+Total2$QualResult [Total2$QFT<0.35]<- 2
+Total2$QualResult[Total2$QualResult==2] <- as.character("HEALTHY CONTROL")
+
+
+#fill in Demographic data
+Demographic.manual<- read.csv("missing-demographic_post.csv")
+Demographic.manual<- filter(Demographic.manual, StudyID %in% Demographic.missing$StudyID)
+Total2<-replace.btwn.tables2(Total2, Demographic.manual, 
+                             "StudyID", "StudyID", "SCREENING.SITE", "SCREENING.SITE")
+Total2<-replace.btwn.tables2(Total2, Demographic.manual, 
+                             "StudyID", "StudyID", "MAL.TEST.RESULTS", "MAL.TEST.RESULTS")
+
+
+#fill in TB data
+chest.manual<- read.csv("chest.missing_post.csv")
+chest.manual<- filter(chest.manual, StudyID %in% chest.missing$StudyID)
+sputum.manual<-read.csv("sputum.missing_post.csv")
+sputum.manual<- filter(sputum.manual, StudyID %in% sputum.missing$StudyID)
+Total2<-replace.btwn.tables2(Total2, chest.manual, "StudyID", "StudyID", "CXR.REPORT", "CXR.REPORT")
+Total2<-replace.btwn.tables2(Total2, chest.manual, "StudyID", "StudyID", "HHC", "HHC")
+Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "EXPERT.RESULTS", "EXPERT.RESULTS")
+Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "HAIN.TEST.RESULTS", "HAIN.TEST.RESULTS")
+Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "MGIT.Culture", "MGIT.Culture")
+Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "Days.to.MGIT.Culture", "Days.to.MGIT.Culture")
+```
+
+```{r checking for missing values again and writing over old versions}
+sputum.missing<-dplyr::select(Total2, StudyID, TB, HIV, CXR.REPORT, FM..RESULTS, EXPERT.RESULTS, HAIN.TEST.RESULTS, MGIT.Culture, Days.to.MGIT.Culture.)%>%
+    filter(is.na(TB)|TB=="ACTIVE"|HIV=="POS")%>%
+    filter(is.na(FM..RESULTS)|is.na(EXPERT.RESULTS)|is.na(HAIN.TEST.RESULTS)|is.na(MGIT.Culture))
+
+QFT.missing<-dplyr::select(Total2, StudyID, TB, NIL, TBAntigen, Mitogen, QFT)%>%
+    filter(is.na(QFT))
+
+chest.missing<-dplyr::select(Total2, StudyID, TB, CXR.REPORT, Days.on.TB.Tx, HHC, Treated.for.TB.Previously.)%>%
+    filter(is.na(TB)|is.na(CXR.REPORT)|is.na(HHC))
+
+TB.missing<-dplyr::select(Total2, StudyID, TB, chest.xray, gene.expert, hain, mgit, microscopy, Days.on.TB.Tx, HHC, Treated.for.TB.Previously., NIL, TBAntigen, Mitogen, QFT)%>%
+    filter(is.na(TB))
+
+Hel.missing<-dplyr::select(Total2, StudyID, HelminthPositive, AscarisPositive, TricurisPositive, SchistosomaPositive, HookwormPositive, SchistosomaIntensity)%>%
+    filter(is.na(HelminthPositive))
+
+Demographic.missing<-dplyr::select(Total2, StudyID, age, sex, SCREENING.SITE, RACE,
+                            MAL.TEST.RESULTS, PT.RESULT, Hb)%>%
+    filter(is.na(RACE) | is.na(age) | is.na(SCREENING.SITE) | is.na(Hb) | is.na(MAL.TEST.RESULTS))
+
+HIV.missing<-dplyr::select(Total2, StudyID, HIV, cd4, viral.load, WHO.STAGE)%>%
+    filter(!(WHO.STAGE %in% c("1","3")))%>%
+    filter(HIV!="NEG")
+
+#have to run these at the console for whatever reason --> try the date/time thing again
+write.csv(Hel.missing, "missing-helminth.csv")
+write.csv(Demographic.missing, "missing-demographic.csv")
+write.csv(HIV.missing, "missing-HIV.csv")
+write.csv(Total2, "complete-kenya.csv")
+write.csv(QFT.missing, "QFT.missing.csv")
+write.csv(chest.missing, "chest.missing.csv")
+write.csv(TB.missing, "TB.missing.csv")
+write.csv(sputum.missing, "sputum.missing.csv")
+
+miss.var<-data.frame(colSums(is.na(Total2)))
+miss.donor<-data.frame(cbind(Total2$StudyID, rowSums(is.na(Total2))))
 
 ```
+
 
