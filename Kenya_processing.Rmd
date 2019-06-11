@@ -16,43 +16,7 @@ Coenrolled$Joint.Study.ID<-paste(Coenrolled$NK.STUDY.ID, Coenrolled$TBRU.STUDY.I
 ```
 
 ```{r functions for data cleaning}
-replace.btwn.tables<-function(datatable1, datatable2, var, ref.var, new.vals){
-    library(dplyr)
-    datatable1<-arrange(datatable1, datatable1[,var])
-    datatable2<-arrange(datatable2, datatable2[,ref.var])
-    inter <- intersect(datatable1[,var], datatable2[,ref.var])
-    tbl1a <- subset(datatable1, datatable1[,var] %in% inter)
-    tbl1b <- subset(datatable1, !(datatable1[,var] %in% inter))
-    tbl2  <- subset(datatable2, datatable2[,ref.var] %in% inter)
-    tbl1a[,var] <- replace(x = tbl1a[,var],
-                           list = (tbl1a[,var] %in% tbl2[,ref.var]),
-                           values = as.character(tbl2[,new.vals]))
-    new.table<-rbind(tbl1a, tbl1b)
-}
-
-replace.btwn.tables2<-function(datatable1, datatable2, id.var, ref.var, new.var, new.vals){
-    library(dplyr)
-    datatable1<-arrange(datatable1, datatable1[,id.var])
-    datatable2<-arrange(datatable2, datatable2[,ref.var])
-    inter <- intersect(datatable1[,id.var], datatable2[,ref.var])
-    tbl1a <- subset(datatable1, datatable1[,id.var] %in% inter)
-    tbl1b <- subset(datatable1, !(datatable1[,id.var] %in% inter))
-    tbl2  <- subset(datatable2, datatable2[,ref.var] %in% inter)
-    tbl1a[,new.var] <- replace(x = tbl1a[,new.var],
-                           list = (tbl1a[,id.var] %in% tbl2[,ref.var]),
-                           values = as.character(tbl2[,new.vals]))
-    new.table<-rbind(tbl1a, tbl1b)
-}
-
-splitter<-function(data,column,splitter,one=NULL,two=NULL,three=NULL,four=NULL){
-        library(data.table)
-        
-        labels<-tstrsplit(data[,column], splitter)
-        data[,one]<-labels[[1]]
-        data[,two]<-labels[[2]]
-        data[,three]<-labels[[3]]
-        return(data)
-}
+source("/Users/tarynam/Desktop/Miscellaneous-Scripts/tryna function.R")
 ```
 
 ```{r Helminth Both}
@@ -125,7 +89,7 @@ Helminth<-join_all(dfs, by="StudyID")
 Helminth<-mutate(Helminth, Number=AscarisPositive + TricurisPositive + SchistosomaPositive + HookwormPositive)%>%
     arrange(StudyID)
 Helminth$StudyID<-as.character(Helminth$StudyID)
-Helminth<-replace.btwn.tables(Helminth, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
+Helminth<-replace.btwn.tables(Helminth, Coenrolled, "StudyID", "TBRU.STUDY.ID", "StudyID", "Joint.Study.ID")
 ```
 
 ```{r QFT Both}
@@ -145,7 +109,7 @@ QFT1b <- filter(QFT1b, !(StudyID %in% inter))%>%
 l<-list(QFT1a, QFT1b)
 QFT1<-data.frame(rbindlist(l, fill = TRUE))
 QFT1$StudyID<-as.character(QFT1$StudyID)
-QFT1<-replace.btwn.tables(QFT1, Coenrolled, "StudyID", "NK.STUDY.ID", "Joint.Study.ID")
+QFT1<-replace.btwn.tables(QFT1, Coenrolled, "StudyID", "NK.STUDY.ID", "StudyID", "Joint.Study.ID")
 #after a lot of digging around with duplicates I noticed that one person was being coded incorrectly after this
 
 QFT2a<-read.csv("TBRU_QFTResults_Main 2017_AUG_18.csv")
@@ -167,7 +131,7 @@ QFT2b<-dplyr::rename(QFT2b, NIL = Nil, TBAntigen = TBAg, QualResult = QFTResult,
 QFT2<-rbindlist(list(QFT2a, QFT2b), fill=TRUE)
 QFT2<-as.data.frame(arrange(QFT2, StudyID))
 #recode all coenrolled individuals Study IDs to be the NK version
-QFT2<-replace.btwn.tables(QFT2, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
+QFT2<-replace.btwn.tables(QFT2, Coenrolled, "StudyID", "TBRU.STUDY.ID", "StudyID", "Joint.Study.ID")
 QFT2<-filter(QFT2, !(StudyID %in% intersect(QFT1$StudyID, QFT2$StudyID)))
 
 QFT<-rbindlist(list(QFT1, QFT2), fill=TRUE)
@@ -225,7 +189,7 @@ xray$chest<-gsub( 3, "NOT TB", xray$chest)
 
 dfs<-list(Enrollment, age, hiv, xray)
 NK<-join_all(dfs, by="StudyID", type="full")
-NK<-replace.btwn.tables(NK, Coenrolled, "StudyID", "NK.STUDY.ID", "Joint.Study.ID")
+NK<-replace.btwn.tables(NK, Coenrolled, "StudyID", "NK.STUDY.ID", "StudyID", "Joint.Study.ID")
 
 #remove(Enrollment, age, hiv, xray, both, dfs)
 ```
@@ -276,7 +240,7 @@ exp$HHC <- gsub("2", "No", exp$HHC)
 dfs<-list(TRU, hiv, pt, xray, hb, exp)
 TBRU<-join_all(dfs, by="StudyID", type="full")
 TBRU<-arrange(TBRU, StudyID)
-TBRU<-replace.btwn.tables(TBRU, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
+TBRU<-replace.btwn.tables(TBRU, Coenrolled, "StudyID", "TBRU.STUDY.ID", "StudyID","Joint.Study.ID")
 #remove(TRU, pt, xray, hb, exp, hiv, dfs)
 ```
 
@@ -290,8 +254,8 @@ NK_unique<-filter(NK, !StudyID %in% inter)
 TBRU_unique<-filter(TBRU, !StudyID %in% inter)
 dfs<-list(NK_unique, TBRU_unique, both)
 cohort<-as.data.frame(rbindlist(dfs, fill=TRUE))
-cohort<-replace.btwn.tables(cohort, Coenrolled, "StudyID", "NK.STUDY.ID", "Joint.Study.ID")
-cohort<-replace.btwn.tables(cohort, Coenrolled, "StudyID", "TBRU.STUDY.ID", "Joint.Study.ID")
+cohort<-replace.btwn.tables(cohort, Coenrolled, "StudyID", "NK.STUDY.ID", "StudyID", "Joint.Study.ID")
+cohort<-replace.btwn.tables(cohort, Coenrolled, "StudyID", "TBRU.STUDY.ID", "StudyID", "Joint.Study.ID")
 ```
 
 ```{r Merge remove pilot samples duplicates and misentered participants}
@@ -349,9 +313,10 @@ location<-read.csv("NK Study Enrollment Details CRF 2018_SEP_19.csv")
 #Participants in the NK study were also enrolled at either CRC or Kombewa. I’ve attached an Excel spreadsheet of the enrollment details that are entered in the database for the NK study SIDs: under the Facilities columns, 1 and 2 = JOOTRH/CRC and 4 and 5 = Kombewa (or Kombewa County Hospital, same thing)
 location$facility[grepl("1|2", location$Facility)]<-"JOOTRH"
 location$facility[grepl("4|5", location$Facility)]<-"KOMBEWA"
-location<-arrange(location, StudyID)
+location<-select(location, StudyID, facility)%>%arrange(StudyID)
+location<-unique(location)
 
-Total<-replace.btwn.tables2(Total, location, "StudyID", "StudyID", "SCREENING.SITE", "facility")
+Total<-replace.btwn.tables(Total, location, "StudyID", "StudyID", "SCREENING.SITE", "facility")
 
 Total$Study[grepl("30|40|80", Total$StudyID)]<-"TRU"
 Total$Study[grepl("NK", Total$StudyID)]<-"NKS"
@@ -642,26 +607,26 @@ setwd("/Applications/Old Computer/Epi Project/Data_clean/")
 #Fill in Helminth data from primary study files
 Hel.manual<- read.csv("missing-helminth_post.csv")
 Hel.manual<- filter(Hel.manual, StudyID %in% Hel.missing$StudyID)
-Total2<-replace.btwn.tables2(Total, Hel.manual, "StudyID", "StudyID", "HelminthPositive", "HelminthPositive")
-Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "AscarisPositive", "AscarisPositive")
-Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "TricurisPositive", "TricurisPositive")
-Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "SchistosomaPositive", "SchistosomaPositive")
-Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "HookwormPositive", "HookwormPositive")
-Total2<-replace.btwn.tables2(Total2, Hel.manual, "StudyID", "StudyID", "SchistosomaIntensity", "SchistosomaIntensity")
+Total2<-replace.btwn.tables(Total, Hel.manual, "StudyID", "StudyID", "HelminthPositive", "HelminthPositive")
+Total2<-replace.btwn.tables(Total2, Hel.manual, "StudyID", "StudyID", "AscarisPositive", "AscarisPositive")
+Total2<-replace.btwn.tables(Total2, Hel.manual, "StudyID", "StudyID", "TricurisPositive", "TricurisPositive")
+Total2<-replace.btwn.tables(Total2, Hel.manual, "StudyID", "StudyID", "SchistosomaPositive", "SchistosomaPositive")
+Total2<-replace.btwn.tables(Total2, Hel.manual, "StudyID", "StudyID", "HookwormPositive", "HookwormPositive")
+Total2<-replace.btwn.tables(Total2, Hel.manual, "StudyID", "StudyID", "SchistosomaIntensity", "SchistosomaIntensity")
 
 #Fill in HIV data from primary study files
 HIV.manual<- read.csv("missing-HIV_post.csv")
 HIV.manual<- filter(HIV.manual, StudyID %in% HIV.missing$StudyID)
-Total2<-replace.btwn.tables2(Total2, HIV.manual, "StudyID", "StudyID", "cd4", "cd4")
-Total2<-replace.btwn.tables2(Total2, HIV.manual, "StudyID", "StudyID", "viral.load", "viral.load")
-Total2<-replace.btwn.tables2(Total2, HIV.manual, "StudyID", "StudyID", "WHO.STAGE", "WHO.STAGE")
+Total2<-replace.btwn.tables(Total2, HIV.manual, "StudyID", "StudyID", "cd4", "cd4")
+Total2<-replace.btwn.tables(Total2, HIV.manual, "StudyID", "StudyID", "viral.load", "viral.load")
+Total2<-replace.btwn.tables(Total2, HIV.manual, "StudyID", "StudyID", "WHO.STAGE", "WHO.STAGE")
 
 #Fill in QFT data
 QFT.manual<- read.csv("QFT.missing_post.csv")
 QFT.manual<- filter(QFT.manual, StudyID %in% QFT.missing$StudyID)
-Total2<-replace.btwn.tables2(Total2, QFT.manual, "StudyID", "StudyID", "NIL", "NIL")
-Total2<-replace.btwn.tables2(Total2, QFT.manual, "StudyID", "StudyID", "TBAntigen", "TBAntigen")
-Total2<-replace.btwn.tables2(Total2, QFT.manual, "StudyID", "StudyID", "Mitogen", "Mitogen")
+Total2<-replace.btwn.tables(Total2, QFT.manual, "StudyID", "StudyID", "NIL", "NIL")
+Total2<-replace.btwn.tables(Total2, QFT.manual, "StudyID", "StudyID", "TBAntigen", "TBAntigen")
+Total2<-replace.btwn.tables(Total2, QFT.manual, "StudyID", "StudyID", "Mitogen", "Mitogen")
 Total2$TBAntigen<-as.numeric(Total2$TBAntigen)
 Total2$Mitogen<-as.numeric(Total2$Mitogen)
 Total2$NIL<-as.numeric(Total2$NIL)
@@ -678,9 +643,9 @@ Total2$QualResult[Total2$QualResult==2] <- as.character("HEALTHY CONTROL")
 #fill in Demographic data
 Demographic.manual<- read.csv("missing-demographic_post.csv")
 Demographic.manual<- filter(Demographic.manual, StudyID %in% Demographic.missing$StudyID)
-Total2<-replace.btwn.tables2(Total2, Demographic.manual, 
+Total2<-replace.btwn.tables(Total2, Demographic.manual, 
                              "StudyID", "StudyID", "SCREENING.SITE", "SCREENING.SITE")
-Total2<-replace.btwn.tables2(Total2, Demographic.manual, 
+Total2<-replace.btwn.tables(Total2, Demographic.manual, 
                              "StudyID", "StudyID", "MAL.TEST.RESULTS", "MAL.TEST.RESULTS")
 
 
@@ -689,12 +654,12 @@ chest.manual<- read.csv("chest.missing_post.csv")
 chest.manual<- filter(chest.manual, StudyID %in% chest.missing$StudyID)
 sputum.manual<-read.csv("sputum.missing_post.csv")
 sputum.manual<- filter(sputum.manual, StudyID %in% sputum.missing$StudyID)
-Total2<-replace.btwn.tables2(Total2, chest.manual, "StudyID", "StudyID", "CXR.REPORT", "CXR.REPORT")
-Total2<-replace.btwn.tables2(Total2, chest.manual, "StudyID", "StudyID", "HHC", "HHC")
-Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "EXPERT.RESULTS", "EXPERT.RESULTS")
-Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "HAIN.TEST.RESULTS", "HAIN.TEST.RESULTS")
-Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "MGIT.Culture", "MGIT.Culture")
-Total2<-replace.btwn.tables2(Total2, sputum.manual, "StudyID", "StudyID", "Days.to.MGIT.Culture.", "Days.to.MGIT.Culture.")
+Total2<-replace.btwn.tables(Total2, chest.manual, "StudyID", "StudyID", "CXR.REPORT", "CXR.REPORT")
+Total2<-replace.btwn.tables(Total2, chest.manual, "StudyID", "StudyID", "HHC", "HHC")
+Total2<-replace.btwn.tables(Total2, sputum.manual, "StudyID", "StudyID", "EXPERT.RESULTS", "EXPERT.RESULTS")
+Total2<-replace.btwn.tables(Total2, sputum.manual, "StudyID", "StudyID", "HAIN.TEST.RESULTS", "HAIN.TEST.RESULTS")
+Total2<-replace.btwn.tables(Total2, sputum.manual, "StudyID", "StudyID", "MGIT.Culture", "MGIT.Culture")
+Total2<-replace.btwn.tables(Total2, sputum.manual, "StudyID", "StudyID", "Days.to.MGIT.Culture.", "Days.to.MGIT.Culture.")
 
 write.csv(Total2, "complete-kenya-filledin.csv")
 
@@ -752,8 +717,12 @@ Total2$SchistosomaIntensity[Total2$StudyID=="NK2162"]<-0
 
 Total2$QFT[Total2$StudyID=="NK2323"]<-0.04
 Total2$Control[Total2$StudyID=="NK2323"]<-9.96
-Total2$TB[Total2$StudyID=="NK2323"]<-"HC"
+Total2$TB[Total2$StudyID=="NK2323"]<-"HEALTHY CONTROL"
 Total2$SchistosomaIntensity[Total2$StudyID=="NK2323"]<-108
+
+Total2$HelminthPositive[Total2$StudyID=="NK2394"]<-1
+Total2$SchistosomaPositive[Total2$StudyID=="NK2394"]<-1
+Total2$SchistosomaIntensity[Total2$StudyID=="NK2394"]<-96/4
 
 setwd("/Applications/Old Computer/Epi Project/Data_clean/")
 write.csv(Total2, "complete-kenya-filledin.csv")
