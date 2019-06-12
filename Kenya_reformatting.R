@@ -22,14 +22,17 @@ reporting$HB<-as.numeric(as.character(reporting$HB))
 reporting$pregnant[reporting$pregnant=="0"]<-as.character("NEG")
 #all missing HIV values are TBRU or joint enrolled and therefore negative (double checked for joint enrolled)
 reporting$HIV[is.na(reporting$HIV)]<-as.character("NEG")
-reporting$viral.load[is.na(reporting$HIV)]<-0
+reporting$viral.load[reporting$HIV=="NEG"]<-0
 reporting$viral.load<-as.numeric(as.character(reporting$viral.load))
-reporting$site[reporting$site=="no file"]<-NA
+reporting$site[reporting$site=="No file"]<-NA
 
 
 reporting<-filter(reporting, !(is.na(TB)) &TB!="INDETERMINATE" & !(is.na(SM)))
+remove<-which(is.na(reporting$chest.xray) & is.na(reporting$gene.expert) 
+      & is.na(reporting$QFT) & reporting$TB=="LTBI")
+reporting<-reporting[-remove,]
 
-analysis<-select(reporting, 
+analysis<-dplyr::select(reporting, 
                  SM, age, helminth, ascaris, hookworm, tricuris, Number, egg, #fine the way they are
                  QFT, ControlQFT, IgG, HB, cd4, viral.load) #continuous variables
 
@@ -47,7 +50,7 @@ for(i in 1:length(analysis$QFT)){
     }
     else analysis$QFT.ind[i]<-1
 }
-analysis$QFT[is.na(analysis$QFT)]<-10
+analysis$QFT[is.na(analysis$QFT)]<-median(subset(analysis$QFT, reporting$TB=="LTBI"), na.rm = TRUE)
 
 analysis$ControlQFT.ind<-NA
 for(i in 1:length(analysis$ControlQFT)){
@@ -56,7 +59,7 @@ for(i in 1:length(analysis$ControlQFT)){
     }
     else analysis$ControlQFT.ind[i]<-1
 }
-analysis$ControlQFT[is.na(analysis$ControlQFT)]<-10
+analysis$ControlQFT[is.na(analysis$ControlQFT)]<-median(analysis$ControlQFT, na.rm = TRUE)
 
 analysis$HB.ind<-NA
 for(i in 1:length(analysis$HB)){
@@ -74,17 +77,19 @@ for(i in 1:length(analysis$cd4)){
     }
     else analysis$cd4.ind[i]<-1
 }
-analysis$cd4[is.na(analysis$cd4)]<-median(analysis$cd4, na.rm=TRUE)
+analysis$cd4[is.na(analysis$cd4) & analysis$hiv==0]<-800
+analysis$cd4[is.na(analysis$cd4) & analysis$hiv==1]<-median(subset(analysis$cd4, reporting$HIV=="POS"), na.rm=TRUE)
+
+
 
 analysis$vl.ind<-NA
 for(i in 1:length(analysis$viral.load)){
-    if (is.na(analysis$vl[i])){
+    if (is.na(analysis$viral.load[i])){
         analysis$vl.ind[i]<-0
     }
     else analysis$vl.ind[i]<-1
 }
-analysis$viral.load[is.na(analysis$viral.load)]<-0
-
+analysis$viral.load[is.na(analysis$viral.load)]<-median(subset(analysis$viral.load, reporting$HIV=="POS"), na.rm=TRUE)
 
 analysis$IgG.ind<-NA
 for(i in 1:length(analysis$IgG)){
@@ -93,7 +98,7 @@ for(i in 1:length(analysis$IgG)){
     }
     else analysis$IgG.ind[i]<-1
 }
-analysis$IgG[is.na(analysis$IgG)]<-40
+analysis$IgG[is.na(analysis$IgG)]<-median(analysis$IgG, na.rm=TRUE)
 
 
 #Dummy Variables for factor variables (accounts for NAs inherently)
@@ -103,5 +108,7 @@ pregnant<-dummies::dummy(reporting$pregnant)
 malaria<-dummies::dummy(reporting$malaria)
 
 test<-cbind(analysis, malaria, pregnant, site, tb)
+test<-dplyr::rename(test, tb = TBACTIVE, hc = "TBHEALTHY CONTROL", ltbi = TBLTBI)%>%
+    dplyr::select(tb, ltbi, hc, SM, everything())
 write.csv(test, "Kenya_analysis.csv")
 write.csv(reporting, "Kenya_reporting.csv")
