@@ -1,0 +1,125 @@
+---
+title: "Untitled"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Cohort Description
+This data is collected as part of two studies that are currently collecting samples in Kisumu Kenya. The studies enroll based on TB and HIV status (HIV is a known risk factor for TB). I'm interested in the relationship between helminth infections and TB and how HIV infection might impact this relationship.
+
+# Experiment Goals
+1. To determine whether there is an association between TB status (none, latent, active) and helminth infections (both grouped and by individual species) while controlling for possible confounders: Age, Sex, Age, Malaria, Anemia (hemoglobin), screening site, basically all the demographic data
+2. To determine whether there is interaction between HIV and helminth infection. There seems to be from some exploratory analysis I did.
+3. To determine if there is a relationship between infection severities: HIV (viral load, CD4 counts), helminth (# of infections, worm #), TB (status, drug resistance etc.)
+4. To determine if there is a relationship between the intensity of the immune response to these infections: TB immune (Quantiferon results-Control and WFT), helminth (worm specific IgG).
+
+# Data Status  
+Okay so this is a hot mess. There are (currently) 7 different excel files from two different studies plus 1 excel doc from data I collected this summer that have to come together to create the complete data set. These data in these excel docs is  still being put into the database in Kenya so they aren't complete. Plus each one comes from a different team so they aren't even up to date with each other. Eventually they will be, but in the meantime I want to come up with a data cleaning strategy and statistical analysis plan so I can just press play on R once the database is finished. 
+
+I'm still working on correctly merging the data sets together because everything was coded in different ways (even NA values) based on the study an the TB status of the participant (annoying I know). I should have a clean neat data set with the variables listed below by January. It's still messy right now so there are repeat variables.
+
+Lastly not every piece of data was collected for every individual. Some of this makes sense; We didn't collect viral loads for HIV- individuals. Some of this was practical; We don't do quantiferon tests (this is a diagnostic test for Latent TB and detects an immune response to TB) in active TB individuals because we know they have TB. Some of it is just circumstantial; Not everyone gives every sample type. But some of it is just misplaced papers somewhere in Kenya.
+
+
+# Variable Definitions
+**Demographic**  
+1. StudyID: Factor variable with unique codes for each participant
+2. Study: Three letter code identifying which study the participant is enrolled in   
+        NKS- NK Cell Study  
+        TBRU- TB Research Unit Study  
+3. CurrVisit: Integer Variable between 1 and 4 indicating what visit the data was collected on  
+4. FollUpVisit: Integer Variable between 1 and 4 indicating how many follow up appointments the participant has had    
+5. SCREENING.SITE:  Factor variable indicating which site the participant was recruited from  
+        JOOTRH- Jaramogi Oginga Odinga Teaching and Referral Hospital  
+        KDH- Kisumu District Hospital  
+        KOMBEWA- Kombewa District Hospital  
+6. AGE: Integer variable ranging 18-83 years  
+7. RACE: Factor variable indicating participant race  
+8. SEX: Factor variable indicating participant sex  
+9. MAL.TEST.RESULTS: Factor variable indicating results of malaria test (Pos- Positive, NEG- Negative, PENDING-pending)    
+10. PT.RESULT: Factor variable indicating results of prothrombin time test, which measures how quickly your blood clots 
+        POS- Positive 
+        NEG- Negative 
+        PENDING-pending  
+11. Hb: Numeric variable indicating hemoglobin levels of participant (g/dl)
+  
+**Helminth Related**  
+12. HelmithPositive: Integer variable indicating whether or not participant is infected with any worm based on two slides examined on two days (0- no, 1-yes)  
+13. AscarisPositive: Integer variable indicating whether or not participant is infected with Ascaris based on two slides examined on two days (0- no, 1-yes)  
+14. TricurisPositive: Integer variable indicating whether or not participant is infected with Trichuris based on two slides examined on two days (0- no, 1-yes)  
+15. SchistosomaPositive: Integer variable indicating whether or not participant is infected with S. mansoni based on two slides examined on two days (0- no, 1-yes)  
+16. HookwormPositive: Integer variable indicating whether or not participant is infected with Hookworm based on two slides examined on two days (0- no, 1-yes)  
+17. Number: Integer variable indicating the number of different worm species a participant is infected with at one time
+18. SchistosomaIntensity: Integer variable indicating the number of worms/gram of stool
+*These need to be coded into the earlier helminth variables*
+19. STOOL.SCHISTO.1: Factor variable indicating whether the first of two tests was positive for any worm infections
+20. STOOL.SCHISTO.2: Factor variable indicating whether the first of two tests was positive for any worm infections
+*I have to finish cleaning and merge an "IgG" Variable*
+
+**HIV Related**  
+21. HIV.Status: Factor variable indicating the HIV Status of participants  
+22. ART: Factor variable indicating whether participant is on antiretroviral therapy or not. (This variable is a mess right now sorry)  
+23. ART.Start.Date: Date variable indicating the date that the participant starting antiretroviral treatment  
+24. WHO.STAGE: Factor variable indicating the classification of HIV disease severity by WHO standards  
+        1 - Assymptomatic   
+        2 - Mild Symptoms  
+        3 -Advanced Symptoms   
+        4 - Severe symptoms  
+25. VL: numeric variable of the viral load of HIV in IU/mL  
+26. CD4.COUNT: numeric variable of the number of CD4 cells/cubic millimetre of blood  
+
+**Tuberculosis Related**  
+27. TB.Status: Factor variable indicating the TB infection status of a participant  
+        HEALTHY CONTROL - No infection   
+        LTBI - Latently infected and assymptomatic   
+        ACTIVE - actively infected and symptomatic  
+28. ON.ANTI.TB.DRUGS: Factor variable indicating whether a participant has started the antibiotic regimen for tuberculosis (Yes or No)  
+29. DATE.ANTI.TB.STARTED: Data variable for the date at which a participant started the antibiotic regimen  
+30. IPTInitiated: Factor variable indicating whether a participant has started the antibiotic regimen for tuberculosis (0- No, 1- Yes) *Needs to be merged with 28*  
+31. QFT.RESULTS: Ignore this for now, I just need it to cross check when I get the final data set  
+
+*The following are results from culture tests in Active TB participants*  
+32. CXR.REPORT: Factor variable indicating the results of a chest x-ray in active TB participants  
+        ABNORMAL - abnormal results indicating tuberculosis disease  
+        NORMAL - normal chest x-ray  
+        PENDING - test results pending  
+        NO - not done  
+33. FM..RESULTS: factor variable indicating the results of a fluorescence microscopy based test for the presence of Mycobacterium tuberculosis in sputum  
+        POS - Mycobacterium tuberculosis identified  
+        NEG - Mycobacterium tuberculosis not identified  
+        PENDING - test results pending   
+34. EXPERT.RESULTS: Factor variable indicating the results of a Gene Xpert test for Mycobacterium antibiotic resistance    
+        POS - Mycobacterium tuberculosis identified with antibiotic resistance    
+        NEGATIVE - Mycobacterium tuberculosis not identified    
+        MTBC detected no RIF resistance - Mycobacterium tuberculosis identified with no antibiotic resistance    
+        MTBC DETECTED NO RIFAMPICIN RESISTANCE - Mycobacterium tuberculosis   identified with no antibiotic resistance  *needs to be coded to match above*  
+        PENDING - test results pending    
+        ERROR - test didn't work)    
+35. HAIN.TEST.RESULTS:  
+        INVALID/INDETERMINATE - test results not valid  
+        NEGATIVE - test negative for Mycobacterium  
+        PENDING  - test results pending  
+        RESISTANT TO INH - test result positive for Mycobacterium that is resistant to the antibiotic isoniazid  
+        SENSITIVE TO INH - test result positive for Mycobacterium that is sensitive to the antibiotic isoniazid  
+        RESISTANT TO INH SENSITIVE TO RIFAMPICIN - test result positive for Mycobacterium that is resistant to the antibiotics isoniazid and Rifampicin  
+        SENSITIVE TO INH AND RIFAMPICIN - test result positive for Mycobacterium that is sensitive to the antibiotics isoniazid and Rifampicin  
+        SENSITIVE TO INH SENSITIVE TO RIF - test result positive for Mycobacterium that is resistant to the antibiotics isoniazid and Rifampicin *needs to be coded to match above*  
+        SENSITIVE TO INH RESISTANT TO RIFAMPICIN - test result positive for Mycobacterium that is sensitive to the antibiotic isoniazid but resistant to Rifampicin  
+36. MGIT.Culture: Factor variable indicating the result of the MGIT Mycobacteria Growth Indicator Tube test  
+        POS - positive for Mycobacterium tuberculosis  
+        POS for MOTT - positive for a mycobacterial species other than Mycobacterium tuberculosis  
+        NEG - negative for Mycobacterial growth  
+        PENDING - test results pending  
+        Culture Contaminated - contaminated test, data invalid)    
+
+*The following are results from a Quantiferon test in Latent TB participants*  
+37. NIL: Numeric variable indicating the amount of IFNg produced under no stimulation condition (pg/mL)  
+38. TBAntigen: Numeric variable indicating the amount of IFNg produced in response to a set of TB Antigens (pg/mL)  
+39. TBAntigen2: Numeric variable indicating the amount of IFNg produced in response to a second set of TB Antigens (pg/mL)  
+40. Mitogen: Numeric variable indicating the amount of IFNg produced in response to a positive control (pg/mL)  
+41. Control: Numeric variable obtained from subtracting the Nil value from the Mitogen value  (pg/mL)  
+42. QFT: Numeric variable obtained from subtracting the Nil value from the TB antigen value  (pg/mL)
