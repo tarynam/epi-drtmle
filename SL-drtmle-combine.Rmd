@@ -6,26 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE)
-```
-
-```{r Fake Data}
-HC<-c(rep(0, 400), rep(1,200))
-LTBI<-c(rep(1, 200), rep(0, 400))
-TB<-c(rep(0,200), rep(1, 200), rep(0,200))
-HIV<-rbinom(600, 1, .4)
-Age<-sample(20:60, 600, replace = TRUE)
-SM<-rbinom(600, 1, .25)
-Sex<-rbinom(600, 1, .5)
-dat<-data.frame(cbind(HC, LTBI, TB, HIV, Sex, SM));
-remove(HC, LTBI, TB, HIV, Age, SM, Sex)
+knitr::opts_chunk$set(echo = TRUE, error=FALSE)
 ```
 
 ```{r Package Requirements, message=FALSE}
 ##package requirements
 pkgs <- c("drtmle","earth","SuperLearner","nloptr", "quadprog","plotmo","plotrix",
           "TeachingDemos","gam","caret","randomForest","arm","RCurl","MASS",
-          "tmle","ggplot2","gbm")
+          "tmle","ggplot2","gbm", "dplyr", "drtmle")
 
 # see what packages are currently installed
 installed_pacakges <- row.names(installed.packages()) # loop over the needed packages
@@ -41,22 +29,31 @@ for(p in pkgs){
 remove(pkgs, installed_pacakges, p, already_installed)
 ```
 
-```{r LTBI HIV- no missing data, eval = FALSE}
-library(dplyr)
-library(SuperLearner)
-library(drtmle)
-y = "LTBI"
+```{r}
+dat<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/Kenya_analysis.csv")
+dat<-dplyr::select(dat, -X)
+for(i in 1:length(dat)){
+    n<-length(which(is.na(dat[[i]])))
+    print(n)
+    }
+```
+
+
+```{r LTBI no missing data}
+tmp <- glm(ltbi ~ . , data = dplyr::select(dat,-ltbi), family = binomial())
 SL_Q <- SuperLearner(
     # Y is the outcome variable
-    Y = dat[, y],
-    # X is a dataframe of predictor variables, in this case
+    Y = dat$ltbi,
+    # X is a dataframe of predictor variables, in this casce
     # everything in dat except for LTBI
-    X = dplyr::select(dat,-y), 
+    X = dplyr::select(dat,-ltbi), 
     newX = NULL,
     # family set to binomial() for 0/1 outcome
     family = binomial(), 
     # SL.library will be filled more completely later
-    SL.library = c("SL.glm","SL.mean"),
+    SL.library = c("SL.glm","SL.earth", "SL.gam", "SL.gbm", "SL.nnet", 
+                   "SL.nnls", "SL.polymars", "SL.randomForest", "SL.svm", "SL.ksvm",
+                   "SL.xgboost", "SL.bayesglm", "SL.polymars"),
     # method specifies how the ensembling is done
     # convex combination negative log-likelihood
     method = "method.CC_nloglik",
@@ -86,51 +83,54 @@ SL_g <- SuperLearner(
     # and convex combination nnloglikelihood method
     method= "method.CC_nloglik",
     # simple library for now
-    SL.library = c("SL.glm","SL.mean")
+    SL.library = c("SL.glm","SL.earth", "SL.gam", "SL.gbm", "SL.nnet", "SL.nnls", "SL.polymars",
+                   "SL.randomForest", "SL.svm")
 )
 
 ###Propensity scores aka gn in drtmle
 
-# since we want to run drtmle on HIV- and HIV+ separately we need a way to
-# only include propensity scores for each group
-include<-rownames(subset(dat, dat$HIV==0))
+###HIV NEGATIVE
 
-# get propensity scores where P(A = 1 | W) for all observations
-# by extracting SL.pred values from the superlearner object
-gn <- data.frame(SL_g$SL.pred)
-gn <- subset(gn, rownames(gn) %in% include)
-gn_1 <- as.matrix(gn$SL_g.SL.pred)
-
-# generate gn list (the 10 part indicates the order aka A=1 then A=0)
-gn10 <- list(
-    # first entry is P(A = 1 | W)
-    gn_1,
-    # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
-    (1 - gn_1)
-)
-
-###Outcome Regressions aka Qn in drtmle
-
-# Again we only want the outcome regressions for the HIV- subset
-data<-dplyr::filter(dat, HIV==0)
-# set up a data frame where everyone has SM=1 or SM=0
-dat1 <- dplyr::select(data,-SM)
-dat1$SM <- 1
-dat0 <- dplyr::select(data, -SM)
-dat0$SM <- 0
-
-# for each SM=0 and SM=1 get OR values for each row of the new data frame
-# using the predict function in the OR model built by super learner (SL_Q)
-Q1n <- predict(SL_Q, newdata=dat1)$pred
-Q0n <- predict(SL_Q, newdata=dat0)$pred
-
-# generate Qn list (the 10 part indicates the order aka A=1 then A=0)
-Qn10 <- list(
-  # first entry is predicted values setting A = 1
-  Q1n,
-  # second entry is predicted values setting A = 0
-  Q0n
-)
+    # since we want to run drtmle on HIV- and HIV+ separately we need a way to
+    # only include propensity scores for each group
+    include<-rownames(subset(dat, dat$hiv==0))
+    
+    # get propensity scores where P(A = 1 | W) for all observations
+    # by extracting SL.pred values from the superlearner object
+    gn <- data.frame(SL_g$SL.pred)
+    gn <- subset(gn, rownames(gn) %in% include)
+    gn_1 <- as.matrix(gn$SL_g.SL.pred)
+    
+    # generate gn list (the 10 part indicates the order aka A=1 then A=0)
+    gn10 <- list(
+        # first entry is P(A = 1 | W)
+        gn_1,
+        # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
+        (1 - gn_1)
+    )
+    
+    ###Outcome Regressions aka Qn in drtmle
+    
+    # Again we only want the outcome regressions for the HIV- subset
+    data<-dplyr::filter(dat, hiv==0)
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat1 <- dplyr::select(data,-SM)
+    dat1$SM <- 1
+    dat0 <- dplyr::select(data, -SM)
+    dat0$SM <- 0
+    
+    # for each SM=0 and SM=1 get OR values for each row of the new data frame
+    # using the predict function in the OR model built by super learner (SL_Q)
+    Q1n <- predict(SL_Q, newdata=dat1)$pred
+    Q0n <- predict(SL_Q, newdata=dat0)$pred
+    
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn10 <- list(
+      # first entry is predicted values setting A = 1
+      Q1n,
+      # second entry is predicted values setting A = 0
+      Q0n
+    )
 
 fit_HIVneg <- drtmle(Y=data$LTBI, A=data$SM, 
                      W=dplyr::select(data, -LTBI, -SM),
@@ -138,9 +138,63 @@ fit_HIVneg <- drtmle(Y=data$LTBI, A=data$SM,
                      Qn = Qn10, gn = gn10, 
                      SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
 )
+
+####HIV POSITIVE
+
+    # since we want to run drtmle on HIV- and HIV+ separately we need a way to
+    # only include propensity scores for each group
+    include<-rownames(subset(dat, dat$hiv==1))
+    
+    # get propensity scores where P(A = 1 | W) for all observations
+    # by extracting SL.pred values from the superlearner object
+    gn <- data.frame(SL_g$SL.pred)
+    gn <- subset(gn, rownames(gn) %in% include)
+    gn_1 <- as.matrix(gn$SL_g.SL.pred)
+    
+    # generate gn list (the 10 part indicates the order aka A=1 then A=0)
+    gn10 <- list(
+        # first entry is P(A = 1 | W)
+        gn_1,
+        # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
+        (1 - gn_1)
+    )
+    
+    ###Outcome Regressions aka Qn in drtmle
+    
+    # Again we only want the outcome regressions for the HIV- subset
+    data<-dplyr::filter(dat, hiv==1)
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat1 <- dplyr::select(data,-SM)
+    dat1$SM <- 1
+    dat0 <- dplyr::select(data, -SM)
+    dat0$SM <- 0
+    
+    # for each SM=0 and SM=1 get OR values for each row of the new data frame
+    # using the predict function in the OR model built by super learner (SL_Q)
+    Q1n <- predict(SL_Q, newdata=dat1)$pred
+    Q0n <- predict(SL_Q, newdata=dat0)$pred
+    
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn10 <- list(
+      # first entry is predicted values setting A = 1
+      Q1n,
+      # second entry is predicted values setting A = 0
+      Q0n
+    )
+
+fit_HIVpos <- drtmle(Y=data$LTBI, A=data$SM, 
+                     W=dplyr::select(data, -LTBI, -SM),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn10, gn = gn10, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+
+IC_LTBI_HIVN<-fit_LTBI_HIVneg$ic_drtmle$ic
+IC_LTBI_HIVP<-fit_LTBI_HIVpos$ic_drtmle$ic
+IC_LTBI<-cbind(IC_LTBI_HIVN, IC_TB_HIVN)
 ```
 
-```{r LTBI missing data}
+```{r LTBI missing data, eval = FALSE}
 library(dplyr)
 library(SuperLearner)
 library(drtmle)
@@ -341,6 +395,5 @@ IC_LTBI_HIVP<-fit_LTBI_HIVpos$ic_drtmle$ic
 ```
 
 ```{r}
-IC<-cbind(IC_LTBI_HIVN, IC_TB_HIVN)
 #solve(cov(IC)) or ginv if solve breaks
 ```
