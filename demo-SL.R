@@ -33,11 +33,13 @@ sl1 <- SuperLearner(
     # SL.library (for now) is specified as a vector of names of functions
     # that implement the desired algorithms. SL.glm and SL.mean
     # are included in the Super Learner package
-    SL.library = c("SL.glm","SL.mean"),
+    SL.library = c("SL.glm","SL.earth", "SL.gam", "SL.gbm", "SL.nnet", 
+                   "SL.nnls", "SL.polymars", "SL.randomForest", "SL.svm", "SL.ksvm",
+                   "SL.bartMachine", "SL.xgboost", "SL.bayesglm", "SL.polymars"),
     # method specifies how the ensembling is done, for now we will use
     # the \sum_{k=1}^K \alpha_k f_{k,n} method by using the deafult
     # option for method (method.NNLS)
-    method = "method.NNLS",
+    method = "method.CC_nloglik",
     # id specifies a unique subject identifier so that whole subjects 
     # are sampled in CV, not just rows of data. chspred only has one row 
     # per subject, so OK to leave as NULL (default)
