@@ -389,7 +389,7 @@ fit_HIVpos <- drtmle(Y=data$LTBI, A=data$SM,
 
 IC_LTBI_HIVN<-fit_LTBI_HIVneg$ic_drtmle$ic
 IC_LTBI_HIVP<-fit_LTBI_HIVpos$ic_drtmle$ic
-IC_LTBI<-cbind(IC_LTBI_HIVN, IC_TB_HIVN)
+save(my_object, file = "path/to/where/I/want/to/save/it.RData")
 ```
 
 ```{r LTBI missing data, eval = FALSE}
