@@ -1,0 +1,90 @@
+---
+title: "Troubleshooting SL glms"
+author: "Taryn McLaughlin"
+date: "7/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=TRUE)
+library(dplyr)
+library(SuperLearner)
+library(knitr)
+```
+
+```{r}
+dat<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/Kenya_analysis.csv")
+dat<-dplyr::select(dat, -X)
+kable(table(dat$ltbi))
+
+bazooka<-dplyr::select(dat, -ltbi, -hc, -tb)
+```
+
+##The glm itslef
+```{r}
+rhs_glm_formula <- "SM + ascaris + tricuris + hookworm"
+other_variables <- " + age + sex + hiv + viral.load + vl.ind + ControlQFT + ControlQFT.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+fit.glm <- glm(glm_formula, data = data.frame(Y = dat$ltbi, bazooka), family = binomial)
+summary(fit.glm)
+```
+
+##The whole wrapper
+```{r}
+SL.myglm.eachworm <- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "SM + ascaris + tricuris + hookworm"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind + ControlQFT + ControlQFT.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+
+fit.SL<-SL.myglm.eachworm(Y=dat$ltbi, X=dplyr::select(dat, -ltbi, -hc, -tb), newX=NULL, family=binomial)
+kable(cbind(fit.SL$fit$object$coefficients))
+hist(fit.SL$pred)
+```
+
+##The full Super Learner
+The SuperLearner runs but I get the warning about rank deficient models.  
+```{r}
+set.seed(1234)
+#Or a full superlearner with the wrapper?
+SL_Q <- SuperLearner(
+    # Y is the outcome variable
+    Y = dat$ltbi,
+    # X is a dataframe of predictor variables, in this casce
+    # everything in dat except for TB outcomes
+    X = dplyr::select(dat, -ltbi, -hc, -tb), 
+    newX = NULL,
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.myglm.eachworm"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+```
+
+
+
+
