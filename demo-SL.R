@@ -33,9 +33,7 @@ sl1 <- SuperLearner(
     # SL.library (for now) is specified as a vector of names of functions
     # that implement the desired algorithms. SL.glm and SL.mean
     # are included in the Super Learner package
-    SL.library = c("SL.glm","SL.earth", "SL.gam", "SL.gbm", "SL.nnet", 
-                   "SL.nnls", "SL.polymars", "SL.randomForest", "SL.svm", "SL.ksvm",
-                   "SL.bartMachine", "SL.xgboost", "SL.bayesglm", "SL.polymars"),
+    SL.library = c("SL.glm","SL.earth", "SL.xgboost", "SL.mean"),
     # method specifies how the ensembling is done, for now we will use
     # the \sum_{k=1}^K \alpha_k f_{k,n} method by using the deafult
     # option for method (method.NNLS)
@@ -131,11 +129,5 @@ Q0n <- predict(sl.Q, newdata=statins0)$pred
 
 # get \bar{Q}_n^a
 Qan <- ifelse(statins$statin==0, Q0n[statins$statin==0], Q1n[statins$statin==1])
-
-
-# hiv vaccine data
-hiv <- read.csv(text = getURL("https://raw.githubusercontent.com/benkeser/sllecture/master/hiv.csv"), header = TRUE)
-
-
 
 
