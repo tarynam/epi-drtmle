@@ -1,19 +1,19 @@
 ---
-title: "Untitled"
+title: "SL drtmle S. mansoni Infection and Tuberculosis"
 author: "Taryn McLaughlin"
 date: "10/30/2018"
 output: html_document
 ---
-
+##Set Up
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, error=FALSE)
+knitr::opts_chunk$set(echo = TRUE, error=FALSE, message=FALSE)
 ```
 
 ```{r Package Requirements, message=FALSE}
 ##package requirements
 pkgs <- c("drtmle","earth","SuperLearner","nloptr", "quadprog","plotmo","plotrix",
           "TeachingDemos","gam","caret","randomForest","arm","RCurl","MASS",
-          "tmle","ggplot2","gbm", "dplyr", "drtmle")
+          "tmle","ggplot2","gbm", "dplyr", "drtmle", "knitr")
 
 # see what packages are currently installed
 installed_pacakges <- row.names(installed.packages()) # loop over the needed packages
@@ -29,15 +29,18 @@ for(p in pkgs){
 remove(pkgs, installed_pacakges, p, already_installed)
 ```
 
+###QC Data
 ```{r Load Data}
 dat<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/Kenya_analysis.csv")
-dat<-dplyr::select(dat, -X)
+dat<-dplyr::select(dat, -X, -egg, -ControlQFT.ind, -ControlQFT)
+dat$Number<-dat$Number-dat$SM
 for(i in 1:length(dat)){
     n<-length(which(is.na(dat[[i]])))
     print(n)
     }
 ```
-`
+
+###Wrappers
 ```{r Wrappers}
 #SL.mean
 #SL.step.forward
@@ -70,7 +73,7 @@ SL.earth.cv <- function(..., nfold = 5){
 
 SL.myglm.eachworm <- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "SM + ascaris + tricuris + hookworm"
-    other_variables <- " + age + sex + hiv + viral.load + vl.ind + ControlQFT + ControlQFT.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -83,7 +86,7 @@ SL.myglm.eachworm <- function(Y, X, newX, family, ...){
 
 SL.myglm.eachworm.g <- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "ascaris + tricuris + hookworm"
-    other_variables <- " + age + sex + hiv + viral.load + vl.ind + ControlQFT + ControlQFT.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -96,7 +99,7 @@ SL.myglm.eachworm.g <- function(Y, X, newX, family, ...){
 
 SL.myglm.totalworm <- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "SM + Number"
-    other_variables <- " + age + sex + hiv + viral.load + vl.ind + ControlQFT + ControlQFT.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind  + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -110,7 +113,7 @@ SL.myglm.totalworm <- function(Y, X, newX, family, ...){
 
 SL.myglm.totalworm.g <- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "Number"
-    other_variables <- " + age + sex + hiv + viral.load + vl.ind + ControlQFT + ControlQFT.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -126,7 +129,7 @@ SL.myglm.totalworm.g <- function(Y, X, newX, family, ...){
 #basically doesn't force things to be linear
 SL.myspline.eachworm<- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "SM + ascaris + tricuris + hookworm"
-    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(ControlQFT) + ControlQFT.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -139,7 +142,7 @@ SL.myspline.eachworm<- function(Y, X, newX, family, ...){
 
 SL.myspline.eachworm.g<- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "ascaris + tricuris + hookworm"
-    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(ControlQFT) + ControlQFT.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -153,7 +156,7 @@ SL.myspline.eachworm.g<- function(Y, X, newX, family, ...){
 
 SL.myspline.totalworm<- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "SM + s(Number)"
-    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(ControlQFT) + ControlQFT.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -166,7 +169,7 @@ SL.myspline.totalworm<- function(Y, X, newX, family, ...){
 
 SL.myspline.totalworm.g<- function(Y, X, newX, family, ...){
     rhs_glm_formula <- "s(Number)"
-    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(ControlQFT) + ControlQFT.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
     # the rest of the code takes care of things SuperLearner needs
     glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
     fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
@@ -280,43 +283,10 @@ predict.SL.stratify.glm <- function(object, newdata, ...){
 }
 ```
 
-```{r LTBI no missing data}
-SL_Q <- SuperLearner(
-    # Y is the outcome variable
-    Y = dat$ltbi,
-    # X is a dataframe of predictor variables, in this casce
-    # everything in dat except for TB outcomes
-    X = dplyr::select(dat,-ltbi, -hc, -tb), 
-    newX = NULL,
-    # family set to binomial() for 0/1 outcome
-    family = binomial(), 
-    # SL.library will be filled more completely later
-    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
-        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
-        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
-        "SL.earth.cv", "SL.step.interaction",
-        "SL.myglm.eachworm", "SL.myglm.totalworm", 
-        "SL.myspline.eachworm", "SL.myspline.totalworm", 
-        "SL.glmnet2way", "SL.stratify.glm"),
-    # method specifies how the ensembling is done
-    # convex combination negative log-likelihood
-    method = "method.CC_nloglik",
-    # id specifies a unique subject identifier. data only has one row 
-    # per subject, so OK to leave as NULL (default)
-    id = NULL, 
-    # verbose controls the printing of messages of SuperLearner's progress.
-    verbose = FALSE, 
-    # control contains options related to logistic ensemble (trimLogit) 
-    # and whether to save the fit library to look at individual 
-    # algorithms later. We will leave as default
-    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
-    # cvControl specifies parameters related to cross validation. Of note
-    # the default is for V=10-fold cross validation. See ?SuperLearner
-    # for more details
-    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
-                     validRows = NULL)
-)
-
+##Super Learner Regressions
+I've done this in the past and stored them so these don't evaluate but you can see the code just in case. I also generate the cross-validated SL here as well.  
+###Propensity Score - S. mansoni infection
+```{r propensity superlearner, eval=FALSE}
 SL_g <- SuperLearner(
     # our outcome is now the S. mansoni variable
     Y = dat$SM, 
@@ -332,117 +302,644 @@ SL_g <- SuperLearner(
         "SL.ranger2", "SL.ranger4", "SL.ranger6", 
         "SL.earth.cv", "SL.step.interaction",
         "SL.myglm.eachworm.g", "SL.myglm.totalworm.g", 
-        "SL.myspline.eachworm.g", "SL.myspline.totalworm.g", 
-        "SL.glmnet2way", "SL.stratify.glm")
+        "SL.myspline.eachworm.g", 
+        "SL.glmnet2way", "SL.stratify.glm"),
+    cvControl = list(V = 10), verbose = TRUE
 )
+save(SL_g, file = "/Users/tarynam/Desktop/epi-drtmle/SL_g.RData")
 
+cv_g<-CV.SuperLearner(
+        # our outcome is now the S. mansoni variable
+    Y = dat$SM, 
+    # our predictors are all variables except for LTBI and S. mansoni
+    X = dplyr::select(dat, -SM, -ltbi, -tb, -hc),
+    # outcome is binary, so let's use family = binomial()
+    family = binomial(),
+    # and convex combination nnloglikelihood method
+    method= "method.CC_nloglik",
+    # simple library for now
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm.g", "SL.myglm.totalworm.g", 
+        "SL.myspline.eachworm.g", 
+        "SL.glmnet2way", "SL.stratify.glm"),
+    cvControl = list(V = 10), verbose = TRUE
+)
+save(cv_g, file = "/Users/tarynam/Desktop/epi-drtmle/cv_g.RData")
+
+```
+
+###Latent TB Infection (LTBI) Outcome Regression
+```{r ltbi superlearner, eval=FALSE}
+SL_ltbi <- SuperLearner(
+    # Y is the outcome variable
+    Y = dat$ltbi,
+    # X is a dataframe of predictor variables, in this casce
+    # everything in dat except for TB outcomes
+    X = dplyr::select(dat,-ltbi, -hc, -tb), 
+    newX = NULL,
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm", "SL.myglm.totalworm", 
+        "SL.myspline.eachworm", "SL.myspline.totalworm", 
+        "SL.glmnet2way"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to #save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+save(SL_ltbi, file = "/Users/tarynam/Desktop/epi-drtmle/SL_ltbi.RData")
+
+cv_ltbi <- CV.SuperLearner(
+    # Y is the outcome variable
+    Y = dat$ltbi,
+    # X is a dataframe of predictor variables, in this casce
+    # everything in dat except for TB outcomes
+    X = dplyr::select(dat,-ltbi, -hc, -tb),
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm", "SL.myglm.totalworm", 
+        "SL.myspline.eachworm", "SL.myspline.totalworm", 
+        "SL.glmnet2way"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to #save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+save(cv_ltbi, file = "/Users/tarynam/Desktop/epi-drtmle/cv_ltbi.RData")
+```
+
+###Active TB Infection (TB) Outcome Regression
+```{r tb superlearner, eval=FALSE}
+SL_tb <- SuperLearner(
+    # Y is the outcome variable
+    Y = dat$tb,
+    # X is a dataframe of predictor variables, in this casce
+    # everything in dat except for TB outcomes
+    X = dplyr::select(dat,-ltbi, -hc, -tb), 
+    newX = NULL,
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm", "SL.myglm.totalworm", 
+        "SL.myspline.eachworm", "SL.myspline.totalworm", 
+        "SL.glmnet2way"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to #save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+save(SL_tb, file = "/Users/tarynam/Desktop/epi-drtmle/SL_tb.RData")
+
+cv_tb <- CV.SuperLearner(
+    # Y is the outcome variable
+    Y = dat$tb,
+    # X is a dataframe of predictor variables, in this casce
+    # everything in dat except for TB outcomes
+    X = dplyr::select(dat,-ltbi, -hc, -tb),
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm", "SL.myglm.totalworm", 
+        "SL.myspline.eachworm", "SL.myspline.totalworm", 
+        "SL.glmnet2way"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to #save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+save(cv_tb, file = "/Users/tarynam/Desktop/epi-drtmle/cv_tb.RData")
+```
+
+```{r if needed load SL from file}
+load("/Users/tarynam/Desktop/epi-drtmle/SL_g.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/SL_ltbi.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/SL_tb.RData")
+
+load("/Users/tarynam/Desktop/epi-drtmle/cv_g.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/cv_ltbi.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/cv_tb.RData")
+```
+
+##drtmle
+###Creating the propensity score lists
+```{r propensity}
+set.seed(1234)
 ###Propensity scores aka gn in drtmle
 
 ###HIV NEGATIVE
 
     # since we want to run drtmle on HIV- and HIV+ separately we need a way to
     # only include propensity scores for each group
-    include<-rownames(subset(dat, dat$hiv==0))
+    include<- dat$hiv==0
     
     # get propensity scores where P(A = 1 | W) for all observations
     # by extracting SL.pred values from the superlearner object
-    gn <- data.frame(SL_g$SL.pred)
-    gn <- subset(gn, rownames(gn) %in% include)
-    gn_1 <- as.matrix(gn$SL_g.SL.pred)
+    gn_1 <- as.numeric(SL_g$SL.pred)[include]
     
     # generate gn list (the 10 part indicates the order aka A=1 then A=0)
-    gn10 <- list(
+    gn_neg <- list(
         # first entry is P(A = 1 | W)
         gn_1,
         # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
         (1 - gn_1)
     )
     
-    ###Outcome Regressions aka Qn in drtmle
-    
-    # Again we only want the outcome regressions for the HIV- subset
-    data<-dplyr::filter(dat, hiv==0)
-    # set up a data frame where everyone has SM=1 or SM=0
-    dat1 <- dplyr::select(data,-SM)
-    dat1$SM <- 1
-    dat0 <- dplyr::select(data, -SM)
-    dat0$SM <- 0
-    
-    # for each SM=0 and SM=1 get OR values for each row of the new data frame
-    # using the predict function in the OR model built by super learner (SL_Q)
-    Q1n <- predict(SL_Q, newdata=dat1)$pred
-    Q0n <- predict(SL_Q, newdata=dat0)$pred
-    
-    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
-    Qn10 <- list(
-      # first entry is predicted values setting A = 1
-      Q1n,
-      # second entry is predicted values setting A = 0
-      Q0n
-    )
-
-fit_HIVneg <- drtmle(Y=data$LTBI, A=data$SM, 
-                     W=dplyr::select(data, -LTBI, -SM),
-                     a_0 = c(1,0), family = binomial(),
-                     Qn = Qn10, gn = gn10, 
-                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
-)
-
 ####HIV POSITIVE
 
     # since we want to run drtmle on HIV- and HIV+ separately we need a way to
     # only include propensity scores for each group
-    include<-rownames(subset(dat, dat$hiv==1))
+    include<- dat$hiv==1
     
     # get propensity scores where P(A = 1 | W) for all observations
     # by extracting SL.pred values from the superlearner object
-    gn <- data.frame(SL_g$SL.pred)
-    gn <- subset(gn, rownames(gn) %in% include)
-    gn_1 <- as.matrix(gn$SL_g.SL.pred)
-    
+    gn_1 <- as.numeric(SL_g$SL.pred)[include]
+
     # generate gn list (the 10 part indicates the order aka A=1 then A=0)
-    gn10 <- list(
+    gn_pos <- list(
         # first entry is P(A = 1 | W)
         gn_1,
         # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
         (1 - gn_1)
     )
     
-    ###Outcome Regressions aka Qn in drtmle
+####Total    
+    gn_1 <- as.numeric(SL_g$SL.pred)
+    
+    # generate gn list (the 10 part indicates the order aka A=1 then A=0)
+    gn <- list(
+        # first entry is P(A = 1 | W)
+        gn_1,
+        # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
+        (1 - gn_1)
+    )
+    
+```
+
+###LTBI
+```{r LTBI drtmle, eval=FALSE}
+set.seed(1234)
+###HIV Negative Outcome Regressions aka Qn in drtmle 
     
     # Again we only want the outcome regressions for the HIV- subset
-    data<-dplyr::filter(dat, hiv==1)
+    data<-dat[dat$hiv==0,]
     # set up a data frame where everyone has SM=1 or SM=0
-    dat1 <- dplyr::select(data,-SM)
+    dat1 <- dplyr::select(data,-ltbi, -hc, -tb)
     dat1$SM <- 1
-    dat0 <- dplyr::select(data, -SM)
+    dat0 <- dplyr::select(data,-ltbi, -hc, -tb)
     dat0$SM <- 0
     
     # for each SM=0 and SM=1 get OR values for each row of the new data frame
     # using the predict function in the OR model built by super learner (SL_Q)
-    Q1n <- predict(SL_Q, newdata=dat1)$pred
-    Q0n <- predict(SL_Q, newdata=dat0)$pred
+    Q1n <- predict(SL_ltbi, newdata=dat1)$pred
+    Q0n <- predict(SL_ltbi, newdata=dat0)$pred
     
     # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
-    Qn10 <- list(
+    Qn_neg <- list(
       # first entry is predicted values setting A = 1
       Q1n,
       # second entry is predicted values setting A = 0
       Q0n
     )
 
-fit_HIVpos <- drtmle(Y=data$LTBI, A=data$SM, 
-                     W=dplyr::select(data, -LTBI, -SM),
+fit_LTBI_HIVneg <- drtmle(Y=data$ltbi, A=data$SM, 
+                     W=dplyr::select(data, -SM, -hc, -ltbi, -tb),
                      a_0 = c(1,0), family = binomial(),
-                     Qn = Qn10, gn = gn10, 
+                     Qn = Qn_neg, gn = gn_neg, 
+                     SL_gr = c("SL.earth", "SL.glm", "SL.mean"), SL_Qr = c("SL.earth", "SL.glm", "SL.mean"))
+
+save(fit_LTBI_HIVneg, file="/Users/tarynam/Desktop/epi-drtmle/fit_LTBI_HIVneg.RData")
+
+###HIV Positive Outcome Regressions aka Qn in drtmle
+    
+    # Again we only want the outcome regressions for the HIV- subset
+    data<-dat[dat$hiv==1,]
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat1 <- dplyr::select(data,-ltbi, -hc, -tb)
+    dat1$SM <- 1
+    dat0 <- dplyr::select(data, -ltbi, -hc, -tb)
+    dat0$SM <- 0   
+    
+    # for each SM=0 and SM=1 get OR values for each row of the new data frame
+    # using the predict function in the OR model built by super learner (SL_Q)
+    Q1n <- predict(SL_ltbi, newdata=dat1)$pred
+    Q0n <- predict(SL_ltbi, newdata=dat0)$pred
+    
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn_pos <- list(
+      # first entry is predicted values setting A = 1
+      Q1n,
+      # second entry is predicted values setting A = 0
+      Q0n
+    )
+
+fit_LTBI_HIVpos <- drtmle(Y=data$ltbi, A=data$SM, 
+                     W=dplyr::select(data, -SM, -hc, -ltbi, -tb),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn_pos, gn = gn_pos, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fit_LTBI_HIVpos, file="/Users/tarynam/Desktop/epi-drtmle/fit_LTBI_HIVpos.RData")
+
+    data<-dat
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat1 <- dplyr::select(data,-ltbi, -hc, -tb)
+    dat1$SM <- 1
+    dat0 <- dplyr::select(data, -ltbi, -hc, -tb)
+    dat0$SM <- 0  
+
+    Q1n <- predict(SL_ltbi, newdata=dat1)$pred
+    Q0n <- predict(SL_ltbi, newdata=dat0)$pred
+    
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn <- list(
+      # first entry is predicted values setting A = 1
+      Q1n,
+      # second entry is predicted values setting A = 0
+      Q0n
+    )
+    
+
+
+fit_LTBI <- drtmle(Y=data$ltbi, A=data$SM, 
+                     W=dplyr::select(data, -SM, -hc, -ltbi, -tb),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn, gn = gn, 
                      SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
 )
 
-IC_LTBI_HIVN<-fit_LTBI_HIVneg$ic_drtmle$ic
-IC_LTBI_HIVP<-fit_LTBI_HIVpos$ic_drtmle$ic
-save(my_object, file = "path/to/where/I/want/to/save/it.RData")
+save(fit_LTBI, file="/Users/tarynam/Desktop/epi-drtmle/fit_LTBI.RData")
+```
+
+###TB
+```{r TB drtmle, eval=FALSE}
+set.seed(1234)
+###HIV Negative Outcome Regressions aka Qn in drtmle 
+    
+    # Again we only want the outcome regressions for the HIV- subset
+    data<-dat[dat$hiv==0,]
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat1 <- dplyr::select(data,-ltbi, -hc, -tb)
+    dat1$SM <- 1
+    dat0 <- dplyr::select(data,-ltbi, -hc, -tb)
+    dat0$SM <- 0
+    
+    # for each SM=0 and SM=1 get OR values for each row of the new data frame
+    # using the predict function in the OR model built by super learner (SL_Q)
+    Q1n <- predict(SL_tb, newdata=dat1)$pred
+    Q0n <- predict(SL_tb, newdata=dat0)$pred
+    
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn_neg <- list(
+      # first entry is predicted values setting A = 1
+      Q1n,
+      # second entry is predicted values setting A = 0
+      Q0n
+    )
+
+fit_TB_HIVneg <- drtmle(Y=data$tb, A=data$SM, 
+                     W=dplyr::select(data, -SM, -hc, -ltbi, -tb),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn_neg, gn = gn_neg, 
+                     SL_gr = c("SL.earth", "SL.glm", "SL.mean"), SL_Qr = c("SL.earth", "SL.glm", "SL.mean"))
+save(fit_TB_HIVneg, file="/Users/tarynam/Desktop/epi-drtmle/fit_TB_HIVneg.RData")
+
+###HIV Positive Outcome Regressions aka Qn in drtmle
+    
+    # Again we only want the outcome regressions for the HIV- subset
+    data<-dat[dat$hiv==1,]
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat1 <- dplyr::select(data,-ltbi, -hc, -tb)
+    dat1$SM <- 1
+    dat0 <- dplyr::select(data, -ltbi, -hc, -tb)
+    dat0$SM <- 0   
+    
+    # for each SM=0 and SM=1 get OR values for each row of the new data frame
+    # using the predict function in the OR model built by super learner (SL_Q)
+    Q1n <- predict(SL_tb, newdata=dat1)$pred
+    Q0n <- predict(SL_tb, newdata=dat0)$pred
+    
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn_pos <- list(
+      # first entry is predicted values setting A = 1
+      Q1n,
+      # second entry is predicted values setting A = 0
+      Q0n
+    )
+
+fit_TB_HIVpos <- drtmle(Y=data$tb, A=data$SM, 
+                     W=dplyr::select(data, -SM, -hc, -ltbi, -tb),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn_pos, gn = gn_pos, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fit_TB_HIVpos, file="/Users/tarynam/Desktop/epi-drtmle/fit_TB_HIVpos.RData")
+
+
+###Total 
+    data<-dat
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat1 <- dplyr::select(data,-ltbi, -hc, -tb)
+    dat1$SM <- 1
+    dat0 <- dplyr::select(data, -ltbi, -hc, -tb)
+    dat0$SM <- 0  
+
+    Q1n <- predict(SL_tb, newdata=dat1)$pred
+    Q0n <- predict(SL_tb, newdata=dat0)$pred
+    
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn <- list(
+      # first entry is predicted values setting A = 1
+      Q1n,
+      # second entry is predicted values setting A = 0
+      Q0n
+    )
+    
+fit_TB <- drtmle(Y=data$tb, A=data$SM, 
+                     W=dplyr::select(data, -SM, -hc, -ltbi, -tb),
+                     a_0 = c(1,0), family = binomial(),
+                     Qn = Qn, gn = gn, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fit_TB, file="/Users/tarynam/Desktop/epi-drtmle/fit_TB.RData")
 ```
 
 ```{r}
-#solve(cov(IC)) or ginv if solve breaks
+load("/Users/tarynam/Desktop/epi-drtmle/fit_LTBI_HIVneg.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fit_LTBI_HIVpos.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fit_LTBI.RData")
+
+IC_LTBI_HIVneg<-fit_LTBI_HIVneg$ic_drtmle$ic
+IC_LTBI_HIVpos<-fit_LTBI_HIVpos$ic_drtmle$ic
+IC_LTBI<-fit_LTBI$ic_drtmle$ic
+
+load("/Users/tarynam/Desktop/epi-drtmle/fit_TB_HIVneg.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fit_TB_HIVpos.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fit_TB.RData")
+
+IC_TB_HIVneg<-fit_TB_HIVneg$ic_drtmle$ic
+IC_TB_HIVpos<-fit_TB_HIVpos$ic_drtmle$ic
+IC_TB<-fit_TB$ic_drtmle$ic
 ```
+
+##Statistical Analysis
+###Total
+```{r}
+lfit<-round(ci(fit_LTBI)[[1]], 4)
+tfit<-round(ci(fit_TB)[[1]], 4)
+HC<-c(1-(lfit[1,1]+tfit[1,1]),
+       1-(lfit[2,1]+tfit[2,1]))
+
+LTBI<-c(paste(lfit[1,1], " (", lfit[1,2], "-", lfit[1,3],")", sep=""),
+        paste(lfit[2,1], " (", lfit[2,2], "-", lfit[2,3],")", sep=""))
+
+TB<-c(paste(tfit[1,1], " (", tfit[1,2], "-", tfit[1,3],")", sep=""),
+        paste(tfit[2,1], " (", tfit[2,2], "-", tfit[2,3],")", sep=""))
+    
+Table<-data.frame(rbind(HC, LTBI, TB),
+       row.names = c("HC", "LTBI", "TB")
+)
+names(Table)<-c("SM+", "SM-")
+
+theta<-matrix(c(fit_LTBI$drtmle$est, 
+       fit_TB$drtmle$est), nrow=4, byrow=TRUE)
+      
+D<-cov(cbind(IC_LTBI, IC_TB))/941
+
+A<-matrix(c( ###derivatives SM+ - SM-
+    1,-1, 0, 0,
+    0, 0, 1,-1),
+    nrow=2, byrow = TRUE)
+
+p1<- A %*% theta
+p2<- solve(A %*% D %*% t(A))
+
+teststat.total<-t(p1) %*% p2 %*% p1
+pval<-pchisq(teststat.total, 2, lower.tail=FALSE)
+kable(Table, caption=paste("p=value=", pval, sep=""))
+```
+
+###HIV-
+```{r}
+lfit<-round(ci(fit_LTBI_HIVneg)[[1]], 4)
+tfit<-round(ci(fit_TB_HIVneg)[[1]], 4)
+HC<-c(1-(lfit[1,1]+tfit[1,1]),
+       1-(lfit[2,1]+tfit[2,1]))
+
+LTBI<-c(paste(lfit[1,1], " (", lfit[1,2], "-", lfit[1,3],")", sep=""),
+        paste(lfit[2,1], " (", lfit[2,2], "-", lfit[2,3],")", sep=""))
+
+TB<-c(paste(tfit[1,1], " (", tfit[1,2], "-", tfit[1,3],")", sep=""),
+        paste(tfit[2,1], " (", tfit[2,2], "-", tfit[2,3],")", sep=""))
+    
+Table.neg<-data.frame(rbind(HC, LTBI, TB),
+       row.names = c("HC", "LTBI", "TB")
+)
+names(Table.neg)<-c("SM+", "SM-")
+
+theta<-matrix(c(fit_LTBI_HIVneg$drtmle$est, 
+       fit_TB_HIVneg$drtmle$est), nrow=4, byrow=TRUE)
+      
+D<-cov(cbind(IC_LTBI_HIVneg, IC_TB_HIVneg))/573
+    
+A<-matrix(c( ###derivatives
+    1,-1, 0, 0,
+    0, 0, 1,-1),
+    nrow=2, byrow = TRUE)
+
+p1<- A %*% theta
+p2<- solve(A %*% D %*% t(A))
+
+teststat.HIVneg<-t(p1) %*% p2 %*% p1
+pval<-pchisq(teststat.HIVneg, 2, lower.tail=FALSE)
+kable(Table.neg, caption=paste("p=value=", pval, sep=""))
+```
+
+###HIV+
+```{r}
+lfit<-round(ci(fit_LTBI_HIVpos)[[1]], 4)
+tfit<-round(ci(fit_TB_HIVpos)[[1]], 4)
+HC<-c(1-(lfit[1,1]+tfit[1,1]),
+       1-(lfit[2,1]+tfit[2,1]))
+
+LTBI<-c(paste(lfit[1,1], " (", lfit[1,2], "-", lfit[1,3],")", sep=""),
+        paste(lfit[2,1], " (", lfit[2,2], "-", lfit[2,3],")", sep=""))
+
+TB<-c(paste(tfit[1,1], " (", tfit[1,2], "-", tfit[1,3],")", sep=""),
+        paste(tfit[2,1], " (", tfit[2,2], "-", tfit[2,3],")", sep=""))
+    
+Table.pos<-data.frame(rbind(HC, LTBI, TB),
+       row.names = c("HC", "LTBI", "TB")
+)
+names(Table.pos)<-c("SM+", "SM-")
+
+theta<-matrix(c(fit_LTBI_HIVpos$drtmle$est, 
+       fit_TB_HIVpos$drtmle$est), nrow=4, byrow=TRUE)
+      
+D<-cov(cbind(IC_LTBI_HIVpos, IC_TB_HIVpos))/368
+
+A<-matrix(c( ###derivatives
+    1,-1, 0, 0,
+    0, 0, 1,-1),
+    nrow=2, byrow = TRUE)
+
+p1<- A %*% theta
+p2<- solve(A %*% D %*% t(A))
+
+teststat.HIVpos<-t(p1) %*% p2 %*% p1
+pval<-pchisq(teststat.HIVpos, 2, lower.tail=FALSE)
+kable(Table.pos, caption=paste("p=value=", pval, sep=""))
+```
+
+###HIV- to HIV+
+```{r}
+theta<-matrix(c(fit_LTBI_HIVneg$drtmle$est, 
+       fit_LTBI_HIVpos$drtmle$est,
+       fit_TB_HIVneg$drtmle$est,
+       fit_TB_HIVpos$drtmle$est), 
+       nrow=8, byrow=TRUE)
+
+neg<-cbind(IC_LTBI_HIVneg, rep(0, 573), rep(0, 573), IC_TB_HIVneg, rep(0, 573), rep(0, 573))
+pos<-cbind(rep(0,368), rep(0,368), IC_LTBI_HIVpos, rep(0,368), rep(0,368), IC_TB_HIVpos)
+inf<-rbind(neg, pos)
+D<-cov(inf)/941
+
+A<-matrix(c( ###derivatives
+    1,-1,0, 0,  -1, 1, 0, 0,
+    0,0, 1,-1,  0, 0, -1, 1),
+    nrow=2, byrow=TRUE)
+
+p1<- A %*% theta
+p2<- solve(A %*% D %*% t(A))
+teststat.hiv<-t(p1) %*% p2 %*% p1
+pval<-pchisq(teststat.hiv, 2, lower.tail=FALSE)
+tbl<-data.frame(cbind(Table.neg, Table.pos))
+names(tbl)<-c("HIV- SM+", "HIV- SM-","HIV+ SM+","HIV+ SM-")
+kable(tbl, caption=paste("p-value=", pval, sep=" "))
+```
+
+##Cross-Validation of Super Learner
+###Propensity Score
+```{r}
+cv.g<-summary(cv_g)$Table
+cv.g<-arrange(cv.g, Ave)
+cv.g$Algorithm<-gsub("_All|SL.", "", cv.g$Algorithm)
+ggplot(cv.g, aes(x=Ave, y=reorder(Algorithm, -Ave)))+
+    geom_point(size=3)+
+    geom_segment(aes(x=Min, xend=Max, y=Algorithm, yend=Algorithm), size=0.5)+
+    theme_bw()+
+    theme(plot.title = element_text(hjust = 0.5))+
+    theme(text = element_text(size=16))+
+    labs(x="10-fold CV Risk Estimate",
+         y="Algorithm",
+         title="Propensity Score")+
+    coord_cartesian(xlim=c(0,1.8))
+```
+
+###LTBI
+```{r}
+cv.l<-summary(cv_ltbi)$Table
+cv.l<-arrange(cv.l, Ave)
+cv.l$Algorithm<-gsub("_All|SL.", "", cv.l$Algorithm)
+ggplot(cv.l, aes(x=Ave, y=reorder(Algorithm, -Ave)))+
+    geom_point(size=3)+
+    geom_segment(aes(x=Min, xend=Max, y=Algorithm, yend=Algorithm), size=0.5)+
+    theme_bw()+
+    theme(plot.title = element_text(hjust = 0.5))+
+    theme(text = element_text(size=16))+
+    labs(x="10-fold CV Risk Estimate",
+         y="Algorithm",
+         title="LTBI Outcome Regression")+
+    coord_cartesian(xlim=c(0,1.8))
+```
+
+###TB
+```{r}
+cv.t<-summary(cv_tb)$Table
+cv.t<-arrange(cv.t, Ave)
+cv.t$Algorithm<-gsub("_All|SL.", "", cv.t$Algorithm)
+cv.t$Ave[cv.t$Algorithm=="rpartPrune"]<-NA
+cv.t$Max[cv.t$Algorithm=="rpartPrune"]<-NA
+ggplot(cv.t, aes(x=Ave, y=reorder(Algorithm, -Ave)))+
+    geom_point(size=3)+
+    geom_segment(aes(x=Min, xend=Max, y=Algorithm, yend=Algorithm), size=0.5)+
+    theme_bw()+
+    theme(plot.title = element_text(hjust = 0.5))+
+    theme(text = element_text(size=16))+
+    labs(x="10-fold CV Risk Estimate",
+         y="Algorithm",
+         title="TB Outcome Regression")
+```
+
