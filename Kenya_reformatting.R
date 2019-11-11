@@ -110,9 +110,9 @@ malaria<-dummies::dummy(reporting$malaria)
 test<-cbind(analysis, malaria, pregnant, site, tb)
 test<-dplyr::rename(test, tb = TBACTIVE, hc = "TBHEALTHY CONTROL", ltbi = TBLTBI)%>%
     dplyr::select(tb, ltbi, hc, SM, everything())
-test<-dplyr::select(test, -IgG, -IgG.ind, -cd4, -cd4.ind, - egg, -QFT, -QFT.ind, -helminth)
+test<-dplyr::select(test, -IgG, -IgG.ind, -cd4, -cd4.ind, -QFT, -QFT.ind, -helminth)
 test<-dplyr::select(test, hc, ltbi, tb, SM, age, sex, 
-    ascaris, hookworm, tricuris, Number, 
+    ascaris, hookworm, tricuris, Number, egg,
     hiv, viral.load, vl.ind,
     ControlQFT, ControlQFT.ind, 
     HB, HB.ind, malariaNEG, malariaPOS, pregnantNEG, pregnantPOS, siteJOOTRH, siteKOMBEWA)
