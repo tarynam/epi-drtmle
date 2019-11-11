@@ -1,0 +1,78 @@
+---
+title: "Untitled"
+author: "Taryn McLaughlin"
+date: "11/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, error=FALSE)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(ggpubr)
+library(tableone)
+library(compareGroups)
+full<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/Kenya_reporting.csv")
+```
+
+```{r tableone, echo = FALSE}
+#Create a variable list which we want in Table 1
+listVars <- c("age", "sex", "QFT", "egg", "site", "RACE", "malaria", "pregnant", "HB", "TB", "ascaris")
+
+#Define categorical variables
+catVars <- c( "sex", "site", "RACE", "malaria", "pregnant", "TB", "ascaris")
+
+mediqr<- c("age", "QFT", "egg", "HB" )
+
+#Total Population
+table1 <- CreateTableOne(vars = listVars, data = full, factorVars = catVars,
+                         strata = c("SM"))
+print(table1, showAllLevels = TRUE, nonnormal = mediqr, quote = FALSE, noSpaces = TRUE, printToggle = FALSE, na.print=FALSE)
+```
+
+
+compareGroups(group ~ age + sex + smoke + waist + hormo, data = predimed, 
+    selec = list(hormo = sex == "Female", waist = waist > 20))
+    
+    restab1 <- createTable(compareGroups(group ~ age + sex, data = predimed))
+restab2 <- createTable(compareGroups(group ~ bmi + smoke, data = predimed))
+rbind(`Non-modifiable risk factors` = restab1, `Modifiable risk factors` = restab2)
+
+#Included in Model    
+```{r in groups}
+res <- compareGroups(SM ~ age + sex , data = full,
+    method = c(age = 2, sex = 3))
+
+include <- createTable(res, type = 1, hide.no = "no", show.n = TRUE,
+                      show.p.overall = TRUE, 
+                      q.type=c(2,3))
+export2md(include, header.labels = c(p.overall = "p-value"))
+```
+
+#Not Included in Model    
+```{r ex groups}
+res <- compareGroups(SM ~ QFT + egg, data = full,
+    method = c(QFT = 2, egg = 2))
+
+exclude <- createTable(res, type = 1, hide.no = "no", show.n = TRUE,
+                      show.p.overall = TRUE, 
+                      q.type=c(2,3))
+export2md(exclude, header.labels = c(p.overall = "p-value"))
+```
+
+
+```{r}
+ayo<-rbind(`Included in Model` = include, `Not Included in Model` = exclude)
+export2md(ayo, header.labels = c(p.overall = "p-value"))
+```
+
+
+
+
+
+
+
+
+
+
