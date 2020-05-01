@@ -167,7 +167,7 @@ QFT$StudyID<-as.character(QFT$StudyID)
 library(dplyr)
 setwd("/Applications/Old Computer/Epi Project/Data_original/")
 
-Enrollment<-read.csv("NK Cell Study Enrollment Summary 2018_MAY_01.csv")
+Enrollment<-read.csv("NK Cell Study Enrollment Summary 2020_APR_29.csv")
 Enrollment<-dplyr::rename(Enrollment, StudyID = STUDY.ID, 
                           HHC = Household.contact.treated.for.TB.within.past.2.yrs)
 
@@ -383,13 +383,15 @@ for (i in 1:length(Total$viral.load)){
 
 Total$ART<-NA
 for (i in 1:length(Total$ART)){
-    if(!is.null(Total$On.Art.[i])){
-        Total$ART[i] <- Total$On.Art[i]}
+    if(!is.na(Total$On.ART.[i])){
+        Total$ART[i] <- as.character(Total$On.ART.[i])}
     
     else if(!is.na(Total$ARTInitiated[i])){
         Total$ART[i] <- Total$ARTInitiated[i]}
 } 
-Total$ART<-gsub("0", "NO", Total$ART)
+Total$ART<-gsub("0", "no", Total$ART)
+Total$ART[Total$ART=="2"]<-"unknown"
+Total$ART<-tolower(Total$ART)
 
 Total$IPT<-NA
 for(i in 1:length(Total$IPT)){
@@ -538,7 +540,7 @@ Total$cd4[Total$HIV=="NEG"]<-"not done"
 Total$chest.xray[Total$TB=="ACTIVE"]<-"not done"
 Total$RACE<-"Black African"
 Total$IPT[Total$TB != "ACTIVE"]<-"NO"
-Total$ART[Total$HIV == "NEG"]<-"NO"
+Total$ART[Total$HIV == "NEG"]<-"no"
 ```
 
 ```{r ineligible people}

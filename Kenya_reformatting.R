@@ -4,7 +4,7 @@ library(dplyr)
 #Selecting and renaming variables
 reporting<-dplyr::select(kenya, 
         StudyID, SCREENING.SITE, RACE, age, sex, MAL.TEST.RESULTS , PT.RESULT, HB,
-        TB,?
+        TB,
         HHC, chest.xray, gene.expert, hain, mgit, microscopy, 
         IPT, Drug.Resistant, INH.Resistant, Rif.Resistant,
         QFT, Control, 
@@ -27,10 +27,25 @@ reporting$viral.load<-as.numeric(as.character(reporting$viral.load))
 reporting$site[reporting$site=="No file"]<-NA
 
 
-reporting<-filter(reporting, !(is.na(TB)) &TB!="INDETERMINATE" & !(is.na(SM)))
+reporting<-filter(reporting, !(is.na(TB)) &TB!="INDETERMINATE")
 remove<-which(is.na(reporting$chest.xray) & is.na(reporting$gene.expert) 
       & is.na(reporting$QFT) & reporting$TB=="LTBI")
 reporting<-reporting[-remove,]
+reporting<-filter(reporting, !(is.na(SM)))
+###taking out TB people we didn't confirm
+#reporting$screen<-0
+#reporting$screen[reporting$microscopy=="pos"]<-1
+#reporting$screen[reporting$gene.expert!="negative"]<-1
+#reporting$screen[reporting$mgit=="MTB"]<-1
+#reporting$screen[is.na(reporting$microscopy)]<-1
+#reporting$screen[is.na(reporting$gene.expert)]<-1
+#reporting$screen[is.na(reporting$mgit)]<-1
+#remove<-which(reporting$TB=="ACTIVE" & reporting$screen==0)
+#screen<-reporting[remove,]
+#reporting<-reporting[-remove,]
+#remove<-c("NK2028", "NK2058", "NK2218", "NK2044", "NK2045", "NK2049", "NK2104",
+          "NK2021", "NK2025", "NK2200", "NK2206", "NK2275", "NK2189")
+#reporting<-reporting[!(reporting$StudyID %in% remove),]
 
 analysis<-dplyr::select(reporting, 
                  SM, age, helminth, ascaris, hookworm, tricuris, Number, egg, #fine the way they are
@@ -110,13 +125,15 @@ malaria<-dummies::dummy(reporting$malaria)
 test<-cbind(analysis, malaria, pregnant, site, tb)
 test<-dplyr::rename(test, tb = TBACTIVE, hc = "TBHEALTHY CONTROL", ltbi = TBLTBI)%>%
     dplyr::select(tb, ltbi, hc, SM, everything())
-test<-dplyr::select(test, -IgG, -IgG.ind, -cd4, -cd4.ind, -QFT, -QFT.ind, -helminth)
-test<-dplyr::select(test, hc, ltbi, tb, SM, age, sex, 
+test<-dplyr::select(test, -IgG, -IgG.ind, -QFT, -QFT.ind, -helminth)
+test<-dplyr::select(test, hc, ltbi, tb, SM, age, sex, cd4, cd4.ind,
     ascaris, hookworm, tricuris, Number, egg,
     hiv, viral.load, vl.ind,
     ControlQFT, ControlQFT.ind, 
     HB, HB.ind, malariaNEG, malariaPOS, pregnantNEG, pregnantPOS, siteJOOTRH, siteKOMBEWA)
 
 
+write.csv(test, "Kenya_analysiscd4.csv")
+test<-dplyr::select(test, -cd4, -cd4.ind)
 write.csv(test, "Kenya_analysis.csv")
 write.csv(reporting, "Kenya_reporting.csv")
