@@ -1,7 +1,7 @@
 ---
 title: "SL drtmle S. mansoni Infection and Tuberculosis"
 author: "Taryn McLaughlin"
-date: "10/30/2018"
+date: "02/19/2020"
 output: html_document
 ---
 ##Set Up
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE, error=FALSE, message=FALSE)
 ##package requirements
 pkgs <- c("drtmle","earth","SuperLearner","nloptr", "quadprog","plotmo","plotrix",
           "TeachingDemos","gam","caret","randomForest","arm","RCurl","MASS",
-          "tmle","ggplot2","gbm", "dplyr", "drtmle", "knitr")
+          "tmle","drtmle", "knitr", "ranger", "xgboost", "ggplot2","gbm", "dplyr", "tidyr", "data.table")
 
 # see what packages are currently installed
 installed_pacakges <- row.names(installed.packages()) # loop over the needed packages
@@ -444,7 +444,7 @@ SL_tb <- SuperLearner(
     cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
                      validRows = NULL)
 )
-save(SL_tb, file = "/Users/tarynam/Desktop/epi-drtmle/SL_tb.RData")
+save(SL_tb, file = "/Users/tarynam/Desktop/epi-drtmle/SL.RData")
 
 cv_tb <- CV.SuperLearner(
     # Y is the outcome variable
@@ -480,22 +480,22 @@ cv_tb <- CV.SuperLearner(
     cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
                      validRows = NULL)
 )
-save(cv_tb, file = "/Users/tarynam/Desktop/epi-drtmle/cv_tb.RData")
+save(cv_tb, file = "/Users/tarynam/Desktop/epi-drtmle/cv.RData")
 ```
 
 ```{r if needed load SL from file}
-load("/Users/tarynam/Desktop/epi-drtmle/SL_g.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/SL_ltbi.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/SL_tb.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/SL_g.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/SL_ltbi.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/SL_tb.RData")
 
-load("/Users/tarynam/Desktop/epi-drtmle/cv_g.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/cv_ltbi.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/cv_tb.RData")
+#load("/Users/tarynam/Desktop/epi-drtmle/original analysis/cv_g.RData")
+#load("/Users/tarynam/Desktop/epi-drtmle/original analysis/cv_ltbi.RData")
+#load("/Users/tarynam/Desktop/epi-drtmle/original analysis/cv.RData")
 ```
 
 ##drtmle
 ###Creating the propensity score lists
-```{r propensity}
+```{r propensity, eval=FALSE}
 set.seed(1234)
 ###Propensity scores aka gn in drtmle
 
@@ -733,21 +733,21 @@ fit_TB <- drtmle(Y=data$tb, A=data$SM,
                      Qn = Qn, gn = gn, 
                      SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
 )
-save(fit_TB, file="/Users/tarynam/Desktop/epi-drtmle/fit_TB.RData")
+save(fit_TB, file="/Users/tarynam/Desktop/epi-drtmle/fit.RData")
 ```
 
-```{r}
-load("/Users/tarynam/Desktop/epi-drtmle/fit_LTBI_HIVneg.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/fit_LTBI_HIVpos.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/fit_LTBI.RData")
+```{r UPDATE THIS}
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/fit_LTBI_HIVneg.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/fit_LTBI_HIVpos.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/fit_LTBI.RData")
 
 IC_LTBI_HIVneg<-fit_LTBI_HIVneg$ic_drtmle$ic
 IC_LTBI_HIVpos<-fit_LTBI_HIVpos$ic_drtmle$ic
 IC_LTBI<-fit_LTBI$ic_drtmle$ic
 
-load("/Users/tarynam/Desktop/epi-drtmle/fit_TB_HIVneg.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/fit_TB_HIVpos.RData")
-load("/Users/tarynam/Desktop/epi-drtmle/fit_TB.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/fit_TB_HIVneg.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/fit_TB_HIVpos.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/941/191031_original analysis/fit_TB.RData")
 
 IC_TB_HIVneg<-fit_TB_HIVneg$ic_drtmle$ic
 IC_TB_HIVpos<-fit_TB_HIVpos$ic_drtmle$ic
@@ -757,22 +757,37 @@ IC_TB<-fit_TB$ic_drtmle$ic
 ##Statistical Analysis
 ###Total
 ```{r}
-lfit<-round(ci(fit_LTBI)[[1]], 4)
-tfit<-round(ci(fit_TB)[[1]], 4)
+N<-dim(IC_LTBI)[1]
+
+## Estimates
+lfit<-round(ci(fit_LTBI)[[1]], 3)
+tfit<-round(ci(fit_TB)[[1]], 3)
 HC<-c(1-(lfit[1,1]+tfit[1,1]),
-       1-(lfit[2,1]+tfit[2,1]))
+      1-(lfit[2,1]+tfit[2,1]))
+est<-100*c(HC, lfit[,1], tfit[,1])
 
-LTBI<-c(paste(lfit[1,1], " (", lfit[1,2], "-", lfit[1,3],")", sep=""),
-        paste(lfit[2,1], " (", lfit[2,2], "-", lfit[2,3],")", sep=""))
+## Confidence Intervals SM
+#HC SM+
+D<-cov(cbind(IC_LTBI[,1], IC_TB[,1]))/N
+A<-matrix(c(-1,-1), ncol=1)
+var<-t(A) %*% D %*% A
+hc.pos.up<-round(HC[1]+1.96*sqrt(var), 3)
+hc.pos.low<-round(HC[1]-1.96*sqrt(var), 3)
 
-TB<-c(paste(tfit[1,1], " (", tfit[1,2], "-", tfit[1,3],")", sep=""),
-        paste(tfit[2,1], " (", tfit[2,2], "-", tfit[2,3],")", sep=""))
-    
-Table<-data.frame(rbind(HC, LTBI, TB),
-       row.names = c("HC", "LTBI", "TB")
-)
-names(Table)<-c("SM+", "SM-")
+#HC SM-
+D<-cov(cbind(IC_LTBI[,2], IC_TB[,2]))/N
+A<-matrix(c(-1,-1), ncol=1)
+var<-t(A) %*% D %*% A
+hc.neg.up<-round(HC[2]+1.96*sqrt(var), 3)
+hc.neg.low<-round(HC[2]-1.96*sqrt(var), 3)
+cil<-100*c(hc.pos.low, hc.neg.low, lfit[,2], tfit[,2])
+ciu<-100*c(hc.pos.up, hc.neg.up, lfit[,3], tfit[,3])
 
+## Table
+label<-c("HC SM+", "HC SM-", "LTBI SM+", "LTBI SM-", "TB SM+", "TB SM-")
+total<-data.frame(cbind(labels, est, cil, ciu))
+
+## Pvalues
 theta<-matrix(c(fit_LTBI$drtmle$est, 
        fit_TB$drtmle$est), nrow=4, byrow=TRUE)
       
@@ -788,27 +803,43 @@ p2<- solve(A %*% D %*% t(A))
 
 teststat.total<-t(p1) %*% p2 %*% p1
 pval<-pchisq(teststat.total, 2, lower.tail=FALSE)
-kable(Table, caption=paste("p=value=", pval, sep=""))
+kable(total, caption=paste("p=value=", pval, sep=""))
 ```
 
 ###HIV-
 ```{r}
-lfit<-round(ci(fit_LTBI_HIVneg)[[1]], 4)
-tfit<-round(ci(fit_TB_HIVneg)[[1]], 4)
+N<-dim(IC_LTBI_HIVneg)[1]
+
+## Estimates
+lfit<-round(ci(fit_LTBI_HIVneg)[[1]], 3)
+tfit<-round(ci(fit_TB_HIVneg)[[1]], 3)
 HC<-c(1-(lfit[1,1]+tfit[1,1]),
-       1-(lfit[2,1]+tfit[2,1]))
+      1-(lfit[2,1]+tfit[2,1]))
+est<-100*c(HC, lfit[,1], tfit[,1])
 
-LTBI<-c(paste(lfit[1,1], " (", lfit[1,2], "-", lfit[1,3],")", sep=""),
-        paste(lfit[2,1], " (", lfit[2,2], "-", lfit[2,3],")", sep=""))
+## Confidence Intervals SM
+#HC SM+
+D<-cov(cbind(IC_LTBI_HIVneg[,1], IC_TB_HIVneg[,1]))/N
+A<-matrix(c(-1,-1), ncol=1)
+var<-t(A) %*% D %*% A
+hc.pos.up<-round(HC[1]+1.96*sqrt(var), 3)
+hc.pos.low<-round(HC[1]-1.96*sqrt(var), 3)
 
-TB<-c(paste(tfit[1,1], " (", tfit[1,2], "-", tfit[1,3],")", sep=""),
-        paste(tfit[2,1], " (", tfit[2,2], "-", tfit[2,3],")", sep=""))
-    
-Table.neg<-data.frame(rbind(HC, LTBI, TB),
-       row.names = c("HC", "LTBI", "TB")
-)
-names(Table.neg)<-c("SM+", "SM-")
+#HC SM-
+D<-cov(cbind(IC_LTBI_HIVneg[,2], IC_TB_HIVneg[,2]))/N
+A<-matrix(c(-1,-1), ncol=1)
+var<-t(A) %*% D %*% A
+hc.neg.up<-round(HC[2]+1.96*sqrt(var), 3)
+hc.neg.low<-round(HC[2]-1.96*sqrt(var), 3)
+cil<-100*c(hc.pos.low, hc.neg.low, lfit[,2], tfit[,2])
+ciu<-100*c(hc.pos.up, hc.neg.up, lfit[,3], tfit[,3])
 
+#Table
+label<-c("HC SM+", "HC SM-", "LTBI SM+", "LTBI SM-", "TB SM+", "TB SM-")
+Table.neg<-data.frame(cbind(label, est, cil, ciu))
+Table.neg$HIV<-"HIV-"
+
+## P values
 theta<-matrix(c(fit_LTBI_HIVneg$drtmle$est, 
        fit_TB_HIVneg$drtmle$est), nrow=4, byrow=TRUE)
       
@@ -823,28 +854,44 @@ p1<- A %*% theta
 p2<- solve(A %*% D %*% t(A))
 
 teststat.HIVneg<-t(p1) %*% p2 %*% p1
-pval<-pchisq(teststat.HIVneg, 2, lower.tail=FALSE)
-kable(Table.neg, caption=paste("p=value=", pval, sep=""))
+pvalneg<-pchisq(teststat.HIVneg, 2, lower.tail=FALSE)
 ```
 
 ###HIV+
 ```{r}
-lfit<-round(ci(fit_LTBI_HIVpos)[[1]], 4)
-tfit<-round(ci(fit_TB_HIVpos)[[1]], 4)
+N<-dim(IC_LTBI_HIVpos)[1]
+
+## Estimates
+lfit<-round(ci(fit_LTBI_HIVpos)[[1]], 3)
+tfit<-round(ci(fit_TB_HIVpos)[[1]], 3)
 HC<-c(1-(lfit[1,1]+tfit[1,1]),
-       1-(lfit[2,1]+tfit[2,1]))
+      1-(lfit[2,1]+tfit[2,1]))
+est<-100*c(HC, lfit[,1], tfit[,1])
 
-LTBI<-c(paste(lfit[1,1], " (", lfit[1,2], "-", lfit[1,3],")", sep=""),
-        paste(lfit[2,1], " (", lfit[2,2], "-", lfit[2,3],")", sep=""))
+## Confidence Intervals SM
+#HC SM+
+D<-cov(cbind(IC_LTBI_HIVpos[,1], IC_TB_HIVpos[,1]))/N
+A<-matrix(c(-1,-1), ncol=1)
+var<-t(A) %*% D %*% A
+hc.pos.up<-round(HC[1]+1.96*sqrt(var), 3)
+hc.pos.low<-round(HC[1]-1.96*sqrt(var), 3)
 
-TB<-c(paste(tfit[1,1], " (", tfit[1,2], "-", tfit[1,3],")", sep=""),
-        paste(tfit[2,1], " (", tfit[2,2], "-", tfit[2,3],")", sep=""))
-    
-Table.pos<-data.frame(rbind(HC, LTBI, TB),
-       row.names = c("HC", "LTBI", "TB")
-)
-names(Table.pos)<-c("SM+", "SM-")
+#HC SM-
+D<-cov(cbind(IC_LTBI_HIVpos[,2], IC_TB_HIVpos[,2]))/N
+A<-matrix(c(-1,-1), ncol=1)
+var<-t(A) %*% D %*% A
+hc.neg.up<-round(HC[2]+1.96*sqrt(var), 3)
+hc.neg.low<-round(HC[2]-1.96*sqrt(var), 3)
+cil<-100*c(hc.pos.low, hc.neg.low, lfit[,2], tfit[,2])
+ciu<-100*c(hc.pos.up, hc.neg.up, lfit[,3], tfit[,3])
 
+#Table
+label<-c("HC SM+", "HC SM-", "LTBI SM+", "LTBI SM-", "TB SM+", "TB SM-")
+Table.pos<-data.frame(cbind(label, est, cil, ciu))
+Table.pos$HIV<-"HIV+"
+
+
+## P values
 theta<-matrix(c(fit_LTBI_HIVpos$drtmle$est, 
        fit_TB_HIVpos$drtmle$est), nrow=4, byrow=TRUE)
       
@@ -859,8 +906,7 @@ p1<- A %*% theta
 p2<- solve(A %*% D %*% t(A))
 
 teststat.HIVpos<-t(p1) %*% p2 %*% p1
-pval<-pchisq(teststat.HIVpos, 2, lower.tail=FALSE)
-kable(Table.pos, caption=paste("p=value=", pval, sep=""))
+pvalpos<-pchisq(teststat.HIVpos, 2, lower.tail=FALSE)
 ```
 
 ###HIV- to HIV+
@@ -885,14 +931,144 @@ p1<- A %*% theta
 p2<- solve(A %*% D %*% t(A))
 teststat.hiv<-t(p1) %*% p2 %*% p1
 pval<-pchisq(teststat.hiv, 2, lower.tail=FALSE)
-tbl<-data.frame(cbind(Table.neg, Table.pos))
-names(tbl)<-c("HIV- SM+", "HIV- SM-","HIV+ SM+","HIV+ SM-")
-kable(tbl, caption=paste("p-value=", pval, sep=" "))
+
+complete<-rbind(Table.neg, Table.pos)
+complete$TB<-tstrsplit(complete$label, " ")[[1]]
+complete$SM<-tstrsplit(complete$label, " ")[[2]]
+complete$CI<-paste0("(", complete$cil, " - ", complete$ciu, ")")
+complete$pretty<-paste(complete$est, "%", "\n", complete$CI,sep="")
+complete$disease<-paste(complete$HIV, complete$SM, sep=" ")
+graph<-complete
+
+##To make it pretty as a table
+presentable<-pivot_wider(complete, values_from = pretty, names_from=disease, id_cols = TB)
+rownames(presentable)<-presentable$TB
+presentable<-dplyr::select(presentable, -TB)
 ```
 
-##Cross-Validation of Super Learner
-###Propensity Score
+Literally just to have in case I need to do error bars again
 ```{r}
+graph$est<-as.numeric(as.character(graph$est))
+graph$cil<-as.numeric(as.character(graph$cil))
+graph$ciu<-as.numeric(as.character(graph$ciu))
+graph$lower<-NA
+graph$upper<-NA
+for(i in 1:nrow(graph)){
+    if (graph$TB[i]=="TB") {
+        graph$lower[i]<-graph$cil[i]
+        graph$upper[i]<-graph$ciu[i]}
+}
+##LOWER
+#HIV-
+graph$lower[graph$TB=="HC" & graph$disease=="HIV- SM-"]<-
+    graph$cil[graph$TB=="HC" & graph$disease=="HIV- SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM-"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV- SM-"]
+
+graph$lower[graph$TB=="LTBI" & graph$disease=="HIV- SM-"]<-
+    graph$cil[graph$TB=="LTBI" & graph$disease=="HIV- SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM-"]
+
+graph$lower[graph$TB=="HC" & graph$disease=="HIV- SM+"]<-
+    graph$cil[graph$TB=="HC" & graph$disease=="HIV- SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM+"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV- SM+"]
+
+graph$lower[graph$TB=="LTBI" & graph$disease=="HIV- SM+"]<-
+    graph$cil[graph$TB=="LTBI" & graph$disease=="HIV- SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM+"]
+
+#HIV+
+graph$lower[graph$TB=="HC" & graph$disease=="HIV+ SM-"]<-
+    graph$cil[graph$TB=="HC" & graph$disease=="HIV+ SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM-"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV+ SM-"]
+
+graph$lower[graph$TB=="LTBI" & graph$disease=="HIV+ SM-"]<-
+    graph$cil[graph$TB=="LTBI" & graph$disease=="HIV+ SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM-"]
+
+graph$lower[graph$TB=="HC" & graph$disease=="HIV+ SM+"]<-
+    graph$cil[graph$TB=="HC" & graph$disease=="HIV+ SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM+"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV+ SM+"]
+
+graph$lower[graph$TB=="LTBI" & graph$disease=="HIV+ SM+"]<-
+    graph$cil[graph$TB=="LTBI" & graph$disease=="HIV+ SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM+"]
+
+##UPPER
+#HIV-
+graph$upper[graph$TB=="HC" & graph$disease=="HIV- SM-"]<-
+    graph$ciu[graph$TB=="HC" & graph$disease=="HIV- SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM-"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV- SM-"]
+
+graph$upper[graph$TB=="LTBI" & graph$disease=="HIV- SM-"]<-
+    graph$ciu[graph$TB=="LTBI" & graph$disease=="HIV- SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM-"]
+
+graph$upper[graph$TB=="HC" & graph$disease=="HIV- SM+"]<-
+    graph$ciu[graph$TB=="HC" & graph$disease=="HIV- SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM+"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV- SM+"]
+
+graph$upper[graph$TB=="LTBI" & graph$disease=="HIV- SM+"]<-
+    graph$ciu[graph$TB=="LTBI" & graph$disease=="HIV- SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV- SM+"]
+
+#HIV+
+graph$upper[graph$TB=="HC" & graph$disease=="HIV+ SM-"]<-
+    graph$ciu[graph$TB=="HC" & graph$disease=="HIV+ SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM-"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV+ SM-"]
+
+graph$upper[graph$TB=="LTBI" & graph$disease=="HIV+ SM-"]<-
+    graph$ciu[graph$TB=="LTBI" & graph$disease=="HIV+ SM-"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM-"]
+
+graph$upper[graph$TB=="HC" & graph$disease=="HIV+ SM+"]<-
+    graph$ciu[graph$TB=="HC" & graph$disease=="HIV+ SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM+"]+
+    graph$est[graph$TB=="LTBI" & graph$disease=="HIV+ SM+"]
+
+graph$upper[graph$TB=="LTBI" & graph$disease=="HIV+ SM+"]<-
+    graph$ciu[graph$TB=="LTBI" & graph$disease=="HIV+ SM+"]+
+    graph$est[graph$TB=="TB" & graph$disease=="HIV+ SM+"]
+```
+ 
+```{r, fig.width=9, fig.height=7}
+source("/Users/tarynam/Desktop/Miscellaneous-Scripts/plot_functions.R")
+
+a<-ggplot(graph, aes(x=SM, y=est, fill=label))+
+  geom_col(position = 'stack')+geom_bar(stat="identity", colour="black")+
+  scale_fill_manual(values=all.cols)+
+  geom_text(aes(label = pretty, color=SM), 
+              position = position_stack(vjust = .5), size=6)+
+  scale_color_manual(values=c("black", "white"), guide=FALSE)+
+  facet_grid(~HIV)+
+  theme_classic()+
+  theme(text = element_text(size=24), plot.title = element_text(size=26)) +
+  theme(legend.position = "bottom", legend.title = element_blank())+
+  labs(x="", y="Probability")+
+  scale_y_continuous(breaks=c(0,25,50,75,100), limits=c(0,120))
+a
+```
+  
+### Comparing SM- to SM+ in HIV-: `r round(pvalneg,4)`  
+### Comparing SM- to SM+ in HIV+: `r round(pvalpos, 4)`  
+### Comparing HIV- to HIV+: `r round(pval,4)`  
+
+
+```{r}
+write.csv(presentable, "/Users/tarynam/Desktop/manuscript-drtmle/drtmle_results.csv")
+cowplot::save_plot("/Users/tarynam/Desktop/manuscript-drtmle/fig2.png", a, base_height = 8, base_width = 10)
+```
+
+
+## Cross-Validation of Super Learner
+### Propensity Score
+```{r, eval=FALSE}
 cv.g<-summary(cv_g)$Table
 cv.g<-arrange(cv.g, Ave)
 cv.g$Algorithm<-gsub("_All|SL.", "", cv.g$Algorithm)
@@ -908,8 +1084,8 @@ ggplot(cv.g, aes(x=Ave, y=reorder(Algorithm, -Ave)))+
     coord_cartesian(xlim=c(0,1.8))
 ```
 
-###LTBI
-```{r}
+### LTBI
+```{r, eval=FALSE}
 cv.l<-summary(cv_ltbi)$Table
 cv.l<-arrange(cv.l, Ave)
 cv.l$Algorithm<-gsub("_All|SL.", "", cv.l$Algorithm)
@@ -925,8 +1101,8 @@ ggplot(cv.l, aes(x=Ave, y=reorder(Algorithm, -Ave)))+
     coord_cartesian(xlim=c(0,1.8))
 ```
 
-###TB
-```{r}
+### TB
+```{r, eval=FALSE}
 cv.t<-summary(cv_tb)$Table
 cv.t<-arrange(cv.t, Ave)
 cv.t$Algorithm<-gsub("_All|SL.", "", cv.t$Algorithm)
