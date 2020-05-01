@@ -1,0 +1,861 @@
+---
+title: "SL-drtmle-egg"
+author: "Taryn McLaughlin"
+date: "10/22/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=FALSE, message=FALSE)
+```
+
+```{r Package Requirements, message=FALSE}
+##package requirements
+pkgs <- c("drtmle","earth","SuperLearner","nloptr", "quadprog","plotmo","plotrix",
+          "TeachingDemos","gam","caret","randomForest","arm","RCurl","MASS",
+          "tmle","ggplot2","gbm", "dplyr", "drtmle", "knitr")
+
+# see what packages are currently installed
+installed_pacakges <- row.names(installed.packages()) # loop over the needed packages
+for(p in pkgs){
+    # check if package is installed
+    already_installed <- p %in% installed_pacakges
+    # if not already installed, install it
+    if(!already_installed){ install.packages(p)
+    }
+    # and load package
+    library(p, character.only = TRUE) }
+
+remove(pkgs, installed_pacakges, p, already_installed)
+```
+
+```{r Load Data}
+dat<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/Kenya_analysis.csv")
+dat$Number<-dat$Number-dat$SM
+dat<-dplyr::select(dat, -X, -SM, -ControlQFT.ind, -ControlQFT)
+for(i in 1:length(dat)){
+    n<-length(which(is.na(dat[[i]])))
+    print(n)
+    }
+```
+`
+```{r Wrappers}
+#SL.mean
+#SL.step.forward
+#SL.step.interaction
+#SL.rpartPrune
+
+SL.xgboost2<-function(..., maxdepth = 2){
+    SL.xgboost(..., max_depth = maxdepth)
+}
+SL.xgboost4<-function(..., maxdepth = 4){
+    SL.xgboost(..., max_depth = maxdepth)
+}
+SL.xgboost6<-function(..., maxdepth = 6){
+    SL.xgboost(..., max_depth = maxdepth)
+}
+
+SL.ranger2<-function(..., mtry = 2){
+    SL.ranger(..., mtry = mtry)
+}
+SL.ranger4<-function(..., mtry = 4){
+    SL.ranger(..., mtry = mtry)
+}
+SL.ranger6<-function(..., mtry = 6){
+    SL.ranger(..., mtry = mtry)
+}
+
+SL.earth.cv <- function(..., nfold = 5){
+        SL.earth(..., nfold = nfold)
+}
+
+SL.myglm.eachworm <- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "eggcat + ascaris + tricuris + hookworm"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind  + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+
+SL.myglm.eachworm.g <- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "ascaris + tricuris + hookworm"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind  + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+
+SL.myglm.totalworm <- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "eggcat + Number"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind  + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+
+
+SL.myglm.totalworm.g <- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "Number"
+    other_variables <- " + age + sex + hiv + viral.load + vl.ind  + HB + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+
+#gam is a glm but flexibly (non-parametrically) models continuous variables
+#instead use s(age) in a glm that you define like the other glms --> s stands for splines
+#basically doesn't force things to be linear
+SL.myspline.eachworm<- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "eggcat + ascaris + tricuris + hookworm"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+} 
+
+SL.myspline.eachworm.g<- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "ascaris + tricuris + hookworm"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+} 
+
+
+SL.myspline.totalworm<- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "eggcat + s(Number)"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+
+SL.myspline.totalworm.g<- function(Y, X, newX, family, ...){
+    rhs_glm_formula <- "s(Number)"
+    other_variables <- " + s(age) + sex + hiv + s(viral.load) + vl.ind + s(HB) + HB.ind + malariaNEG + malariaPOS + pregnantNEG + pregnantPOS + siteJOOTRH + siteKOMBEWA"
+    # the rest of the code takes care of things SuperLearner needs
+    glm_formula <- paste0("Y ~ ", rhs_glm_formula, other_variables)
+    fit.glm <- glm(glm_formula, data = data.frame(Y , X), family = family)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+
+#In case modeling on the total data gives us entirely different results than if we modeled separately on HIV
+
+SL.glmnet2way<-function (Y, X, newX, family, obsWeights, id, alpha = 1, nfolds = 10, 
+                         nlambda = 100, useMin = TRUE, loss = "deviance", ...) {
+    SuperLearner:::.SL.require("glmnet") #keep this one
+    if (!is.matrix(X)) {
+        X <- model.matrix(~-1 + .^2, X) #updated
+        newX <- model.matrix(~-1 + .^2, newX) #updated
+    }
+    fitCV <- glmnet::cv.glmnet(x = X, y = Y, weights = obsWeights, 
+                               lambda = NULL, type.measure = loss, nfolds = nfolds, 
+                               family = family$family, alpha = alpha, nlambda = nlambda, 
+                               ...)
+    pred <- predict(fitCV, newx = newX, type = "response", s = ifelse(useMin, 
+                                                                      "lambda.min", "lambda.1se"))
+    fit <- list(object = fitCV, useMin = useMin)
+    class(fit) <- "SL.glmnet2way" #changed this to match the name
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+#How does this know to pull from the new glmnet and not the old one???
+predict.SL.glmnet2way<-function (object, newdata, remove_extra_cols = T, add_missing_cols = T, ...) 
+{
+    SuperLearner:::.SL.require("glmnet") #keep this one
+    if (!is.matrix(newdata)) {
+        newdata <- model.matrix(~-1 + .^2, newdata) #updated
+    }
+    original_cols = rownames(object$object$glmnet.fit$beta) #This is where I wasn't sure. 
+    if (remove_extra_cols) {
+        extra_cols = setdiff(colnames(newdata), original_cols)
+        if (length(extra_cols) > 0) {
+            warning(paste("Removing extra columns in prediction data:", 
+                          paste(extra_cols, collapse = ", ")))
+            newdata = newdata[, !colnames(newdata) %in% extra_cols, 
+                              drop = F]
+        }
+    }
+    if (add_missing_cols) {
+        missing_cols = setdiff(original_cols, colnames(newdata))
+        if (length(missing_cols) > 0) {
+            warning(paste("Adding missing columns in prediction data:", 
+                          paste(missing_cols, collapse = ", ")))
+            new_cols = matrix(0, nrow = nrow(newdata), ncol = length(missing_cols))
+            colnames(new_cols) = missing_cols
+            newdata = cbind(newdata, new_cols)
+            newdata = newdata[, original_cols]
+        }
+    }
+    pred <- predict(object$object, newx = newdata, type = "response", 
+                    s = ifelse(object$useMin, "lambda.min", "lambda.1se"))
+    return(pred)
+}
+
+
+SL.stratify.glm <- function(Y, X, newX, stratify_variable = "hiv", family, ...){
+        # subset to folks with stratify variable == 1
+        X_strat1 <- X[X[,stratify_variable] == 1, , drop = FALSE]
+        # drop stratify variable
+        X_strat1 <- X_strat1[ , -which(colnames(X_strat1) == stratify_variable)]
+        # same thing for held-out data
+        newX_strat1 <- newX[newX[,stratify_variable] == 1, , drop = FALSE]
+        newX_strat1 <- newX_strat1[ , -which(colnames(newX_strat1) == stratify_variable)]
+        # same thing for outcome
+        Y_strat1 <- Y[X[,stratify_variable] == 1]
+        glm_strat1 <- glm(Y_strat1 ~ . , data = X_strat1, family = family)
+        pred_strat1 <- predict(glm_strat1, newdata = newX_strat1, type = "response")
+        
+        # now play the same game in folks with stratify variable == 0
+        # subset to folks with stratify variable == 0
+        X_strat0 <- X[X[,stratify_variable] == 0, , drop = FALSE]
+        # drop stratify variable
+        X_strat0 <- X_strat0[ , -which(colnames(X_strat0) == stratify_variable)]
+        # same thing for held-out data
+        newX_strat0 <- newX[newX[,stratify_variable] == 0, , drop = FALSE]
+        newX_strat0 <- newX_strat0[ , -which(colnames(newX_strat0) == stratify_variable)]
+        # same thing for outcome
+        Y_strat0 <- Y[X[,stratify_variable] == 0]
+        glm_strat0 <- glm(Y_strat0 ~ . , data = X_strat0, family = family)
+        pred_strat0 <- predict(glm_strat0, newdata = newX_strat0, type = "response")
+ 
+        # now wrap up in a way that SuperLearner likes
+        fit <- list(object_strat0 = glm_strat0, object_strat1 = glm_strat1, 
+                    stratify_variable = stratify_variable)
+        class(fit) <- "SL.stratify.glm"
+        pred <- rep(NA, nrow(newX))
+        pred[newX[,stratify_variable] == 1] <- pred_strat1
+        pred[newX[,stratify_variable] == 0] <- pred_strat0
+        out <- list(pred = pred, fit = fit)
+        return(out)
+}
+predict.SL.stratify.glm <- function(object, newdata, ...){
+        # subset newdata based on stratify variable
+        newdata_strat1 <- newdata[newdata[,object$stratify_variable] == 1, , drop = FALSE]
+        newdata_strat0 <- newdata[newdata[,object$stratify_variable] == 0, , drop = FALSE]
+        pred_strat1 <- predict(object$object_strat1, newdata = newdata_strat1, type = "response")
+        pred_strat0 <- predict(object$object_strat0, newdata = newdata_strat0, type = "response")
+        pred <- rep(NA, nrow(newdata))
+        pred[newdata[,stratify_variable] == 1] <- pred_strat1
+        pred[newdata[,stratify_variable] == 0] <- pred_strat0 
+        return(pred)
+}
+```
+
+```{r propensity superlearner, eval=FALSE}
+#low
+dat$eggcat<-0
+dat$eggcat[(dat$egg>0 & dat$egg<100)]<-1
+SLegg_low <- SuperLearner(
+    # our outcome is now the S. mansoni egg category
+    Y = dat$eggcat, 
+    # our predictors are all variables except for LTBI and S. mansoni
+    X = dplyr::select(dat, -egg, -eggcat, -ltbi, -tb, -hc),
+    # outcome is binary, so let's use family = binomial()
+    family = binomial(),
+    # and convex combination nnloglikelihood method
+    method= "method.CC_nloglik",
+    # simple library for now
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm.g", "SL.myglm.totalworm.g", 
+        "SL.myspline.eachworm.g", 
+        "SL.glmnet2way", "SL.stratify.glm"),
+    cvControl = list(V = 10), verbose = TRUE
+)
+
+#med
+dat$eggcat<-0
+dat$eggcat[(dat$egg>99 & dat$egg<400)]<-1
+SLegg_med <- SuperLearner(
+    # our outcome is now the S. mansoni egg category
+    Y = dat$eggcat, 
+    # our predictors are all variables except for LTBI and S. mansoni
+    X = dplyr::select(dat, -egg, -eggcat, -ltbi, -tb, -hc),
+    # outcome is binary, so let's use family = binomial()
+    family = binomial(),
+    # and convex combination nnloglikelihood method
+    method= "method.CC_nloglik",
+    # simple library for now
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm.g", "SL.myglm.totalworm.g", 
+        "SL.myspline.eachworm.g", 
+        "SL.glmnet2way", "SL.stratify.glm"),
+    cvControl = list(V = 10), verbose = TRUE
+)
+
+#high
+dat$eggcat<-0
+dat$eggcat[dat$egg>399]<-1
+SLegg_high <- SuperLearner(
+    # our outcome is now the S. mansoni egg category
+    Y = dat$eggcat, 
+    # our predictors are all variables except for LTBI and S. mansoni
+    X = dplyr::select(dat, -egg, -eggcat, -ltbi, -tb, -hc),
+    # outcome is binary, so let's use family = binomial()
+    family = binomial(),
+    # and convex combination nnloglikelihood method
+    method= "method.CC_nloglik",
+    # simple library for now
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm.g", "SL.myglm.totalworm.g", 
+        "SL.myspline.eachworm.g", 
+        "SL.glmnet2way", "SL.stratify.glm"),
+    cvControl = list(V = 10), verbose = TRUE
+)
+save(SLegg_low, file = "/Users/tarynam/Desktop/epi-drtmle/SLegg_low.RData")
+save(SLegg_med, file = "/Users/tarynam/Desktop/epi-drtmle/SLegg_med.RData")
+save(SLegg_high, file = "/Users/tarynam/Desktop/epi-drtmle/SLegg_high.RData")
+```
+
+```{r}
+dat$eggcat<-0
+
+median(dat$egg[(dat$egg>0 & dat$egg<100)])
+dat$eggcat[(dat$egg>0 & dat$egg<100)]<-24
+
+median(dat$egg[(dat$egg>99 & dat$egg<400)])
+dat$eggcat[(dat$egg>99 & dat$egg<400)]<-180
+
+median(dat$egg[dat$egg>399])
+dat$eggcat[dat$egg>399]<-678
+```
+
+```{r ltbi superlearner, eval=FALSE}
+SLegg_ltbi <- SuperLearner(
+    # Y is the outcome variable
+    Y = dat$ltbi,
+    # X is a dataframe of predictor variables, in this casce
+    # everything in dat except for TB outcomes
+    X = dplyr::select(dat, -egg, -ltbi, -hc, -tb), 
+    newX = NULL,
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm", "SL.myglm.totalworm", 
+        "SL.myspline.eachworm", "SL.myspline.totalworm", 
+        "SL.glmnet2way"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+save(SLegg_ltbi, file = "/Users/tarynam/Desktop/epi-drtmle/SLegg_ltbi.RData")
+```
+
+```{r tb superlearner, eval=FALSE}
+SLegg_tb <- SuperLearner(
+    # Y is the outcome variable
+    Y = dat$tb,
+    # X is a dataframe of predictor variables, in this casce
+    # everything in dat except for TB outcomes
+    X = dplyr::select(dat, -egg, -ltbi, -hc, -tb), 
+    newX = NULL,
+    # family set to binomial() for 0/1 outcome
+    family = binomial(), 
+    # SL.library will be filled more completely later
+    SL.library = c("SL.mean", "SL.step.forward", "SL.rpartPrune",
+        "SL.xgboost2", 'SL.xgboost4', "SL.xgboost6", 
+        "SL.ranger2", "SL.ranger4", "SL.ranger6", 
+        "SL.earth.cv", "SL.step.interaction",
+        "SL.myglm.eachworm", "SL.myglm.totalworm", 
+        "SL.myspline.eachworm", "SL.myspline.totalworm", 
+        "SL.glmnet2way"),
+    # method specifies how the ensembling is done
+    # convex combination negative log-likelihood
+    method = "method.CC_nloglik",
+    # id specifies a unique subject identifier. data only has one row 
+    # per subject, so OK to leave as NULL (default)
+    id = NULL, 
+    # verbose controls the printing of messages of SuperLearner's progress.
+    verbose = FALSE, 
+    # control contains options related to logistic ensemble (trimLogit) 
+    # and whether to save the fit library to look at individual 
+    # algorithms later. We will leave as default
+    control = list(saveFitLibrary = TRUE, trimLogit = 0.001),
+    # cvControl specifies parameters related to cross validation. Of note
+    # the default is for V=10-fold cross validation. See ?SuperLearner
+    # for more details
+    cvControl = list(V = 10L, stratifyCV = FALSE, shuffle = TRUE, 
+                     validRows = NULL)
+)
+save(SLegg_tb, file = "/Users/tarynam/Desktop/epi-drtmle/SLegg_tb.RData")
+```
+
+```{r load from files}
+load("/Users/tarynam/Desktop/epi-drtmle/SLegg_tb.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/SLegg_ltbi.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/SLegg_high.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/SLegg_med.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/SLegg_low.RData")
+```
+
+##drtmle
+###Creating the propensity score lists
+```{r propensity}
+set.seed(1234)
+###Propensity scores aka gn in drtmle
+
+###HIV NEGATIVE
+
+    # since we want to run drtmle on HIV- and HIV+ separately we need a way to
+    # only include propensity scores for each group
+    include<- dat$hiv==0
+    
+    # get propensity scores where P(A = 1 | W) for all observations
+    # by extracting SL.pred values from the superlearner object
+    gn_l <- as.numeric(SLegg_low$SL.pred)[include]
+    gn_m <- as.numeric(SLegg_med$SL.pred)[include]
+    gn_h <- as.numeric(SLegg_high$SL.pred)[include]
+
+    # generate gn list (the 10 part indicates the order aka A=1 then A=0)
+    gn_neg <- list(
+        # first entry is P(A = 0 | W)
+        1-(gn_l+gn_m+gn_h),        
+        # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
+        gn_l, gn_m, gn_h
+    )
+    
+####HIV POSITIVE
+
+    # since we want to run drtmle on HIV- and HIV+ separately we need a way to
+    # only include propensity scores for each group
+    include<- dat$hiv==1
+    
+    # get propensity scores where P(A = 1 | W) for all observations
+    # by extracting SL.pred values from the superlearner object
+    gn_l <- as.numeric(SLegg_low$SL.pred)[include]
+    gn_m <- as.numeric(SLegg_med$SL.pred)[include]
+    gn_h <- as.numeric(SLegg_high$SL.pred)[include]
+
+    # generate gn list (the 10 part indicates the order aka A=1 then A=0)
+    gn_pos <- list(
+        # first entry is P(A = 0 | W)
+        1-(gn_l+gn_m+gn_h),        
+        # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
+        gn_l, gn_m, gn_h
+    )
+    
+####Total    
+    gn_l <- as.numeric(SLegg_low$SL.pred)
+    gn_m <- as.numeric(SLegg_med$SL.pred)
+    gn_h <- as.numeric(SLegg_high$SL.pred)
+    
+    # generate gn list (the 10 part indicates the order aka A=1 then A=0)
+    gn <- list(
+        # first entry is P(A = 0 | W)
+        1-(gn_l+gn_m+gn_h),        
+        # second entry is P(A = 0 | W) = 1 - P(A = 1 | W)
+        gn_l, gn_m, gn_h
+    )
+    
+```
+
+###LTBI
+```{r LTBI drtmle, eval=FALSE}
+set.seed(1234)
+data<-dat
+
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat0 <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dat0$eggcat <- 0     
+    datl <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datl$eggcat <- 24
+    datm <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datm$eggcat <- 180
+    dath <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dath$eggcat <- 678
+    
+    Q0n <- predict(SLegg_ltbi, newdata=dat0)$pred
+    Qln <- predict(SLegg_ltbi, newdata=datl)$pred
+    Qmn <- predict(SLegg_ltbi, newdata=datm)$pred
+    Qhn <- predict(SLegg_ltbi, newdata=dath)$pred
+
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn <- list(
+      # first entry is predicted values setting A = 1A = 0
+      Q0n, Qln, Qmn, Qhn
+    )
+    
+fitegg_LTBI <- drtmle(Y=data$ltbi, A=data$eggcat, 
+                     W=dplyr::select(data, -egg, -eggcat, -hc, -ltbi, -tb),
+                     a_0 = c(0, 24, 180, 678), family = binomial(),
+                     Qn = Qn, gn = gn, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fitegg_LTBI, file="/Users/tarynam/Desktop/epi-drtmle/fitegg_LTBI.RData")
+
+####HIV+
+data<-dat[dat$hiv==1,]
+
+    dat0 <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dat0$eggcat <- 0     
+    datl <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datl$eggcat <- 24
+    datm <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datm$eggcat <- 180
+    dath <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dath$eggcat <- 678
+    
+    Q0n <- predict(SLegg_ltbi, newdata=dat0)$pred
+    Qln <- predict(SLegg_ltbi, newdata=datl)$pred
+    Qmn <- predict(SLegg_ltbi, newdata=datm)$pred
+    Qhn <- predict(SLegg_ltbi, newdata=dath)$pred
+
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn_pos <- list(
+      # first entry is predicted values setting A = 1A = 0
+      Q0n, Qln, Qmn, Qhn
+    )
+    
+fitegg_LTBI_pos <- drtmle(Y=data$ltbi, A=data$eggcat, 
+                     W=dplyr::select(data, -egg, -eggcat, -hc, -ltbi, -tb),
+                     a_0 = c(0, 24, 180, 678), family = binomial(),
+                     Qn = Qn_pos, gn = gn_pos, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fitegg_LTBI_pos, file="/Users/tarynam/Desktop/epi-drtmle/fitegg_LTBI_pos.RData")
+
+
+####HIV-
+data<-dat[dat$hiv==0,]
+
+    dat0 <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dat0$eggcat <- 0     
+    datl <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datl$eggcat <- 24
+    datm <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datm$eggcat <- 180
+    dath <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dath$eggcat <- 678
+    
+    Q0n <- predict(SLegg_ltbi, newdata=dat0)$pred
+    Qln <- predict(SLegg_ltbi, newdata=datl)$pred
+    Qmn <- predict(SLegg_ltbi, newdata=datm)$pred
+    Qhn <- predict(SLegg_ltbi, newdata=dath)$pred
+
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn_neg <- list(
+      # first entry is predicted values setting A = 1A = 0
+      Q0n, Qln, Qmn, Qhn
+    )
+    
+fitegg_LTBI_neg <- drtmle(Y=data$ltbi, A=data$eggcat, 
+                     W=dplyr::select(data, -egg, -eggcat, -hc, -ltbi, -tb),
+                     a_0 = c(0, 24, 180, 678), family = binomial(),
+                     Qn = Qn_neg, gn = gn_neg, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fitegg_LTBI_neg, file="/Users/tarynam/Desktop/epi-drtmle/fitegg_LTBI_neg.RData")
+```
+
+###TB
+```{r TB drtmle, eval=FALSE}
+set.seed(1234)
+data<-dat
+
+    # set up a data frame where everyone has SM=1 or SM=0
+    dat0 <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dat0$eggcat <- 0     
+    datl <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datl$eggcat <- 24
+    datm <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datm$eggcat <- 180
+    dath <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dath$eggcat <- 678
+    
+    Q0n <- predict(SLegg_tb, newdata=dat0)$pred
+    Qln <- predict(SLegg_tb, newdata=datl)$pred
+    Qmn <- predict(SLegg_tb, newdata=datm)$pred
+    Qhn <- predict(SLegg_tb, newdata=dath)$pred
+
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn <- list(
+      # first entry is predicted values setting A = 1A = 0
+      Q0n, Qln, Qmn, Qhn
+    )
+    
+fitegg_TB <- drtmle(Y=data$tb, A=data$eggcat, 
+                     W=dplyr::select(data, -egg, -eggcat, -hc, -ltbi, -tb),
+                     a_0 = c(0, 24, 180, 678), family = binomial(),
+                     Qn = Qn, gn = gn, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fitegg_TB, file="/Users/tarynam/Desktop/epi-drtmle/fitegg_TB.RData")
+
+####HIV+
+data<-dat[dat$hiv==1,]
+
+    dat0 <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dat0$eggcat <- 0     
+    datl <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datl$eggcat <- 24
+    datm <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datm$eggcat <- 180
+    dath <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dath$eggcat <- 678
+    
+    Q0n <- predict(SLegg_tb, newdata=dat0)$pred
+    Qln <- predict(SLegg_tb, newdata=datl)$pred
+    Qmn <- predict(SLegg_tb, newdata=datm)$pred
+    Qhn <- predict(SLegg_tb, newdata=dath)$pred
+
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn_pos <- list(
+      # first entry is predicted values setting A = 1A = 0
+      Q0n, Qln, Qmn, Qhn
+    )
+    
+    
+fitegg_TB_pos <- drtmle(Y=data$tb, A=data$eggcat, 
+                     W=dplyr::select(data, -egg, -eggcat, -hc, -ltbi, -tb),
+                     a_0 = c(0, 24, 180, 678), family = binomial(),
+                     Qn = Qn_pos, gn = gn_pos, 
+                     SL_gr = c("SL.glm"), SL_Qr = c("SL.glm")
+)
+save(fitegg_TB_pos, file="/Users/tarynam/Desktop/epi-drtmle/fitegg_TB_pos.RData")
+
+
+####HIV-
+data<-dat[dat$hiv==0,]
+
+    dat0 <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dat0$eggcat <- 0     
+    datl <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datl$eggcat <- 24
+    datm <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    datm$eggcat <- 180
+    dath <- dplyr::select(data, -egg, -ltbi, -hc, -tb)
+    dath$eggcat <- 678
+    
+    Q0n <- predict(SLegg_tb, newdata=dat0)$pred
+    Qln <- predict(SLegg_tb, newdata=datl)$pred
+    Qmn <- predict(SLegg_tb, newdata=datm)$pred
+    Qhn <- predict(SLegg_tb, newdata=dath)$pred
+
+    # generate Qn list (the 10 part indicates the order aka A=1 then A=0)
+    Qn_neg <- list(
+      # first entry is predicted values setting A = 1A = 0
+      Q0n, Qln, Qmn, Qhn
+    )
+    
+fitegg_TB_neg <- drtmle(Y=data$tb, A=data$eggcat, 
+                     W=dplyr::select(data, -egg, -eggcat, -hc, -ltbi, -tb),
+                     a_0 = c(0, 24, 180, 678), family = binomial(),
+                     Qn = Qn_neg, gn = gn_neg, 
+                     SL_gr = c("SL.earth", "SL.glm"), SL_Qr = c("SL.earth", "SL.glm")
+)
+save(fitegg_TB_neg, file="/Users/tarynam/Desktop/epi-drtmle/fitegg_TB_neg.RData")
+```
+
+```{r}
+load("/Users/tarynam/Desktop/epi-drtmle/fitegg_LTBI.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fitegg_LTBI_neg.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fitegg_LTBI_pos.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fitegg_TB.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fitegg_TB_neg.RData")
+load("/Users/tarynam/Desktop/epi-drtmle/fitegg_TB_pos.RData")
+```
+
+```{r}
+ltbi<-data.frame(ci(fitegg_LTBI)$drtmle)
+ltbi$tb<-"LTBI"
+ltbi$egglevel<-rownames(ltbi)
+tb<-data.frame(ci(fitegg_TB)$drtmle)
+tb$tb<-"TB"
+tb$egglevel<-rownames(tb)
+test<-rbind(ltbi, tb)
+
+x<-split(test, test$egglevel)
+est<-sapply(x, function (g){1-colSums(g[,1:3])})[1,]
+cil<-NA
+ciu<-NA
+tb<-"HC"
+egglevel<-c(0,180,24,678)
+hc<-data.frame(cbind(est, cil, ciu, tb, egglevel))
+
+final<-rbind(test, hc)
+final$est<-as.numeric(final$est)
+final$cil<-as.numeric(final$cil)
+final$ciu<-as.numeric(final$ciu)
+full_table<-final
+full_table$HIV<-"Combined"
+
+total<-ggplot(final, aes(x=egglevel, y=est, color=tb))+
+    geom_point(size=3)+
+    geom_segment(aes(x=egglevel, xend=egglevel, y=cil, yend=ciu), size=0.5)+
+    theme_classic()+
+    scale_color_manual(values = c("#1a9850" , "#2166ac", "#b2182b"))+
+    scale_x_discrete(
+        labels=c("None", "Light\n 1-99 epg", "Moderate\n 100-399 epg", "Heavy\n400+ epg"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+    theme(text = element_text(size=16))+
+    labs(x="Egg Burden Category",
+         y="Proportion of Mtb Infection",
+         title="Total")
+```
+
+```{r}
+ltbi<-data.frame(ci(fitegg_LTBI_neg)$drtmle)
+ltbi$tb<-"LTBI"
+ltbi$egglevel<-rownames(ltbi)
+tb<-data.frame(ci(fitegg_TB_neg)$drtmle)
+tb$tb<-"TB"
+tb$egglevel<-rownames(tb)
+test<-rbind(ltbi, tb)
+
+x<-split(test, test$egglevel)
+est<-sapply(x, function (g){1-colSums(g[,1:3])})[1,]
+cil<-NA
+ciu<-NA
+tb<-"HC"
+egglevel<-c(0,180,24,678)
+hc<-data.frame(cbind(est, cil, ciu, tb, egglevel))
+
+final<-rbind(test, hc)
+final$est<-as.numeric(final$est)
+final$cil<-as.numeric(final$cil)
+final$ciu<-as.numeric(final$ciu)
+neg_table<-final
+neg_table$HIV<-"HIV-"
+
+neg<-ggplot(final, aes(x=egglevel, y=est, color=tb))+
+    geom_point(size=3)+
+    geom_segment(aes(x=egglevel, xend=egglevel, y=cil, yend=ciu), size=0.5)+
+    theme_classic()+
+    scale_color_manual(values = c("#1a9850" , "#2166ac", "#b2182b"))+
+    scale_x_discrete(
+        labels=c("None", "Light\n 1-99 epg", "Moderate\n 100-399 epg", "Heavy\n400+ epg"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+    theme(text = element_text(size=16))+
+    labs(x="Egg Burden",
+         y="Proportion of Mtb Infection",
+         title="HIV-")
+```
+
+```{r}
+ltbi<-data.frame(ci(fitegg_LTBI_pos)$drtmle)
+ltbi$tb<-"LTBI"
+ltbi$egglevel<-rownames(ltbi)
+tb<-data.frame(ci(fitegg_TB_pos)$drtmle)
+tb$tb<-"TB"
+tb$egglevel<-rownames(tb)
+test<-rbind(ltbi, tb)
+
+x<-split(test, test$egglevel)
+est<-sapply(x, function (g){1-colSums(g[,1:3])})[1,]
+cil<-NA
+ciu<-NA
+tb<-"HC"
+egglevel<-c(0,180,24,678)
+hc<-data.frame(cbind(est, cil, ciu, tb, egglevel))
+
+final<-rbind(test, hc)
+final$est<-as.numeric(final$est)
+final$cil<-as.numeric(final$cil)
+final$ciu<-as.numeric(final$ciu)
+pos_table<-final
+pos_table$HIV<-"HIV+"
+
+pos<-ggplot(final, aes(x=egglevel, y=est, color=tb))+
+    geom_point(size=3)+
+    geom_segment(aes(x=egglevel, xend=egglevel, y=cil, yend=ciu), size=0.5)+
+    theme_classic()+
+    scale_color_manual(values = c("#1a9850" , "#2166ac", "#b2182b"))+
+    scale_x_discrete(
+        labels=c("None", "Light\n 1-99 epg", "Moderate\n 100-399 epg", "Heavy\n400+ epg"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+    theme(text = element_text(size=16))+
+    labs(x="Egg Burden",
+         y="Proportion of Mtb Infection",
+         title="HIV+")
+```
+
+```{r}
+full<-bind_rows(list(full_table, neg_table, pos_table))
+full$egglevel<-factor(full$egglevel, levels=c("0", "24", "180", "678"))
+kable(arrange(full_table, tb, egglevel))
+kable(arrange(neg_table, tb, egglevel))
+kable(arrange(pos_table, tb, egglevel))
+```
+
+```{r, fig.height=8}
+ggplot(full, aes(x=egglevel, y=est, color=tb))+
+    geom_point(size=3)+
+    geom_segment(aes(x=egglevel, xend=egglevel, y=cil, yend=ciu), size=0.5)+
+    theme_classic()+
+    scale_color_manual(values = c("#1a9850" , "#2166ac", "#b2182b"))+
+    scale_x_discrete(
+        labels=c("None", "Light\n 1-99 epg", "Moderate\n 100-399 epg", "Heavy\n400+ epg"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+    theme(text = element_text(size=16))+
+    facet_wrap(~HIV, ncol=1)+
+    labs(x="Egg Burden",
+         y="Proportion of Mtb Infection",
+         title="")
+```
+
