@@ -12,37 +12,74 @@ library(ggplot2)
 library(knitr)
 library(ggpubr)
 library(tableone)
-library(compareGroups)
+library(data.table)
+
+#library(compareGroups) ### now tossing a warning. crap.
+test<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/complete-kenya-filledin.csv")
 full<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/Kenya_reporting.csv")
+art<-read.csv("/Applications/Old Computer/Epi Project/Data_clean/NK-ART.csv", nrows=123)
+full$Number<-full$Number-full$SM
+full$helminth<-0
+full$helminth[full$ascaris==1]<-1
+full$helminth[full$hookworm==1]<-1
+full$helminth[full$tricuris==1]<-1
 ```
 
-```{r tableone, echo = FALSE}
+```{r tableone}
 #Create a variable list which we want in Table 1
-listVars <- c("age", "sex", "QFT", "egg", "site", "RACE", "malaria", "pregnant", "HB", "TB", "ascaris")
+listVars <- c("age", "sex", "RACE", "site", "HB", "pregnant", 
+              "malaria", "helminth","ascaris", "tricuris", "hookworm", "Number",
+              "QFT", "egg", "HIV", "viral.load", "QFT", "chest.xray")
 
 #Define categorical variables
-catVars <- c( "sex", "site", "RACE", "malaria", "pregnant", "TB", "ascaris")
+catVars <- c( "sex", "site", "RACE",  "pregnant", "TB", 
+             "malaria", "helminth","ascaris", "tricuris", "hookworm", "Number")
 
-mediqr<- c("age", "QFT", "egg", "HB" )
+mediqr<- c("age", "QFT", "egg", "HB" , "viral.load")
 
 #Total Population
-table1 <- CreateTableOne(vars = listVars, data = full, factorVars = catVars,
-                         strata = c("SM"))
-print(table1, showAllLevels = TRUE, nonnormal = mediqr, quote = FALSE, noSpaces = TRUE, printToggle = FALSE, na.print=FALSE)
+table1 <- CreateTableOne(vars = listVars, data = full, factorVars = catVars)
+print(table1, showAllLevels = TRUE, nonnormal = mediqr)
+```
+New HIV measures
+```{r}
+hiv<-full[full$HIV=="POS",]
+hiv$suppressed<-"no"
+hiv$suppressed[hiv$viral.load<21]<-"yes"
+table1 <- CreateTableOne(vars = "suppressed", strata="SM", data = hiv, factorVars = "suppressed")
+print(table1,  showAllLevels = TRUE)
+table1 <- CreateTableOne(vars = "suppressed", strata="TB", data = hiv, factorVars = "suppressed")
+print(table1,  showAllLevels = TRUE)
+```
+
+```{r}
+test$ART<-as.character(test$ART)
+test$ART[test$ART==""]<-"unknown"
+test$ART[is.na(test$ART)]<-"unknown"
+art<-filter(test, test$HIV=="POS" & (test$StudyID %in% full$StudyID))
+art$TB<-factor(art$TB, levels=c("HEALTHY CONTROL", "LTBI", "ACTIVE"))
+
+table1 <- CreateTableOne(vars = "ART", strata="TB", data = art, factorVars = "ART")
+print(table1,  showAllLevels = TRUE)
+
+table1 <- CreateTableOne(vars = "ART", strata="SchistosomaPositive", data = art, factorVars = "ART")
+print(table1,  showAllLevels = TRUE)
 ```
 
 
-compareGroups(group ~ age + sex + smoke + waist + hormo, data = predimed, 
-    selec = list(hormo = sex == "Female", waist = waist > 20))
-    
-    restab1 <- createTable(compareGroups(group ~ age + sex, data = predimed))
-restab2 <- createTable(compareGroups(group ~ bmi + smoke, data = predimed))
-rbind(`Non-modifiable risk factors` = restab1, `Modifiable risk factors` = restab2)
 
-#Included in Model    
+
+
+# This will no longer work because it was using compareGroups which is throwing an error   
+#By SM
+##Included in Model    
 ```{r in groups}
-res <- compareGroups(SM ~ age + sex , data = full,
-    method = c(age = 2, sex = 3))
+res <- compareGroups(SM ~ 
+    age + sex + RACE + site + malaria + pregnant + HB + HIV + viral.load + 
+        helminth + Number + ascaris + hookworm + tricuris, data = full,
+    method = c(age =2, sex =3, RACE =3, site =3,  malaria =3, pregnant =3, HB =2, viral.load =2,
+               helminth =3, Number =3, ascaris =3, hookworm =3, tricuris =3),
+        selec = list(viral.load = HIV == "POS"))
 
 include <- createTable(res, type = 1, hide.no = "no", show.n = TRUE,
                       show.p.overall = TRUE, 
@@ -50,10 +87,20 @@ include <- createTable(res, type = 1, hide.no = "no", show.n = TRUE,
 export2md(include, header.labels = c(p.overall = "p-value"))
 ```
 
-#Not Included in Model    
+##Not Included in Model
 ```{r ex groups}
-res <- compareGroups(SM ~ QFT + egg, data = full,
-    method = c(QFT = 2, egg = 2))
+res <- compareGroups(SM ~ QFT + ControlQFT + 
+                         chest.xray + chest.xray + chest.xray + chest.xray + 
+        gene.expert + hain +mgit + microscopy + IPT + 
+            Drug.Resistant + INH.Resistant + Rif.Resistant + 
+            cd4 + egg , data = full,
+    method = c(QFT = 2, ControlQFT =2, chest.xray =3, chest.xray =3, chest.xray =3, chest.xray =3, 
+        gene.expert =3, hain =3, mgit =3, microscopy =3, IPT =3, 
+        Drug.Resistant =3, INH.Resistant =3, Rif.Resistant =3, 
+        cd4 =2, egg = 2),
+        selec = list(chest.xray = TB == "HEALTHY CONTROL", chest.xray.1 = TB == "LTBI", chest.xray.2 = TB == "ACTIVE", 
+                     cd4 = HIV == "POS", egg = SM == 1))
+
 
 exclude <- createTable(res, type = 1, hide.no = "no", show.n = TRUE,
                       show.p.overall = TRUE, 
@@ -62,17 +109,38 @@ export2md(exclude, header.labels = c(p.overall = "p-value"))
 ```
 
 
-```{r}
-ayo<-rbind(`Included in Model` = include, `Not Included in Model` = exclude)
-export2md(ayo, header.labels = c(p.overall = "p-value"))
+
+#By TB
+##Included in Model    
+```{r included groups}
+res <- compareGroups(TB ~ 
+    age + sex + RACE + site + malaria + pregnant + HB + HIV + viral.load + 
+        helminth + Number + ascaris + hookworm + tricuris, data = full,
+    method = c(age =2, sex =3, RACE =3, site =3,  malaria =3, pregnant =3, HB =2, viral.load =2,
+               helminth =3, Number =3, ascaris =3, hookworm =3, tricuris =3),
+        selec = list(viral.load = HIV == "POS"))
+
+include <- createTable(res, type = 1, hide.no = "no", show.n = TRUE,
+                      show.p.overall = TRUE, 
+                      q.type=c(2,3))
+export2md(include, header.labels = c(p.overall = "p-value"))
 ```
 
+##Not Included in Model
+```{r excluded groups}
+res <- compareGroups(TB ~ QFT + ControlQFT + chest.xray + chest.xray + chest.xray + 
+        gene.expert + hain +mgit + microscopy + IPT + 
+            Drug.Resistant + INH.Resistant + Rif.Resistant + 
+            cd4 + egg , data = full,
+    method = c(QFT = 2,  ControlQFT =2, chest.xray =3, chest.xray =3, chest.xray =3, 
+        gene.expert =3, hain =3, mgit =3, microscopy =3, IPT =3, 
+        Drug.Resistant =3, INH.Resistant =3, Rif.Resistant =3, 
+        cd4 =2, egg = 2),
+        selec = list(cd4 = HIV == "POS", egg = SM == 1))
 
 
-
-
-
-
-
-
-
+exclude <- createTable(res, type = 1, hide.no = "no", show.n = TRUE,
+                      show.p.overall = TRUE, 
+                      q.type=c(2,3))
+export2md(exclude, header.labels = c(p.overall = "p-value"))
+```
